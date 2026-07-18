@@ -22,16 +22,20 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * UI state of record for the Home screen. Speech-friendly defaults (MP3 · 128 kbps ·
- * 44.1 kHz · mono) — matches the "podcaster / talk broadcaster" primary use case.
+ * UI state of record. The audio settings (codec/bitrate/sampleRate/mono) are *derived from
+ * the selected profile* — they reflect what is persisted on [ProfileEntity]. The Home
+ * chooser therefore tunes the selected profile in place; the bound [StreamService] reads
+ * the same profile row via Room at start time, so chooser changes take effect on the next
+ * start (the [needsRestartToApply] flow surfaces that when Live).
  *
- * State discipline: codec/bitrate/sampleRate/mono live here as source-of-truth; the UI
- * never holds a local copy. The bound [StreamService.state] is pushed in from
- * [MainActivity]'s ServiceConnection via [onServiceStateChanged] — the VM never owns the
- * binding (Activity lifecycle owns it).
+ * When no profile is selected, the derived flows fall back to speech-friendly defaults
+ * (MP3 · 128 · 44.1 kHz · mono); HomeScreen disables the chooser in that case.
  *
- * ponytail: persist the "currently selected profile + last codec/bitrate" as user prefs
- * (DataStore) so a process death doesn't reset to defaults. Out of scope for 12a.
+ * State discipline: VM owns source-of-truth; screens pull state in + emit events out.
+ * The bound [StreamService.state] is pushed in from [MainActivity]'s ServiceConnection
+ * via [onServiceStateChanged] — the VM never owns the binding.
+ *
+ * ponytail: persist selectedProfileId across process death (DataStore). Out of scope 12b.
  */
 class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -59,45 +63,61 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     private val _streamState = MutableStateFlow<StreamState>(StreamState.Idle)
     val streamState: StateFlow<StreamState> = _streamState.asStateFlow()
 
-    // ---- Codec / bitrate / sample-rate / mono (speech defaults) ----
+    /**
+     * Snapshot of the selected profile captured at the moment [start] was last invoked.
+     * StreamService holds its own equivalent snapshot for the running encode; this mirror
+     * lets us compare "what the live stream is using" vs "what the profile row now says"
+     * to drive [needsRestartToApply].
+     */
+    private val _startSnapshot = MutableStateFlow<ProfileEntity?>(null)
 
-    private val _codec = MutableStateFlow(Codec.MP3)
-    val codec: StateFlow<Codec> = _codec.asStateFlow()
+    // ---- Audio settings: derived from the selected profile ----
+    //
+    // Defaults (MP3 · 128 · 44.1 kHz · mono) surface only when no profile is selected —
+    // HomeScreen disables the chooser then, so these never reach a Live stream.
 
-    private val _bitrate = MutableStateFlow(128)
-    val bitrate: StateFlow<Int> = _bitrate.asStateFlow()
+    val codec: StateFlow<Codec> = selectedProfile
+        .map { it?.codecEnum() ?: Codec.MP3 }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Codec.MP3)
 
-    private val _sampleRate = MutableStateFlow(44_100)
-    val sampleRate: StateFlow<Int> = _sampleRate.asStateFlow()
+    val bitrate: StateFlow<Int> = selectedProfile
+        .map { it?.bitrateKbps ?: 128 }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 128)
 
-    private val _mono = MutableStateFlow(true)
-    val mono: StateFlow<Boolean> = _mono.asStateFlow()
+    val sampleRate: StateFlow<Int> = selectedProfile
+        .map { it?.sampleRateHz ?: 44_100 }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 44_100)
+
+    val mono: StateFlow<Boolean> = selectedProfile
+        .map { it?.mono ?: true }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     /** HE-AAC v1 forced at AAC ≤ 24 kbps — derived from [AudioConfigRules.needsHeAac]. */
-    val heAacActive: StateFlow<Boolean> = combine(_codec, _bitrate) { c, b ->
+    val heAacActive: StateFlow<Boolean> = combine(codec, bitrate) { c, b ->
         AudioConfigRules.needsHeAac(c, b)
     }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     /**
-     * True when audio settings diverge from the profile that's currently Live.
-     * Changing them requires a stop+start to take effect — the VM does NOT auto-restart.
-     *
-     * Implementation note: bundled into (state, profile) pair first so the whole
-     * derivation stays within kotlinx-coroutines' 5-arity [combine] overload.
+     * True when audio settings on the selected profile diverge from the snapshot the
+     * running stream was started with. The VM does NOT auto-restart — surfacing this hint
+     * is enough; user stops + starts to apply.
      */
     val needsRestartToApply: StateFlow<Boolean> = combine(
-        combine(streamState, selectedProfile) { s, p -> s to p },
-        _codec,
-        _bitrate,
-        _sampleRate,
-        _mono,
-    ) { (state, profile), codec, bitrate, sr, mono ->
-        state is StreamState.Live && profile != null && (
-            profile.codec != codec.name ||
-                profile.bitrateKbps != bitrate ||
-                profile.sampleRateHz != sr ||
-                profile.mono != mono
+        streamState, selectedProfile, _startSnapshot,
+    ) { state, profile, snapshot ->
+        state is StreamState.Live &&
+            snapshot != null &&
+            profile != null &&
+            snapshot.id == profile.id && (
+                snapshot.codec != profile.codec ||
+                    snapshot.bitrateKbps != profile.bitrateKbps ||
+                    snapshot.sampleRateHz != profile.sampleRateHz ||
+                    snapshot.mono != profile.mono
             )
     }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
@@ -115,40 +135,79 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     /** Profile id awaiting permission grant to start. Cleared on grant or abort. */
     private var pendingStartProfileId: Long? = null
 
-    // ---- Mutators ----
+    // ---- Selection ----
 
     fun selectProfile(id: Long?) {
         _selectedProfileId.value = id
     }
 
+    // ---- Audio setters: tune the selected profile in place ----
+    //
+    // Each setter is a no-op when no profile is selected (chooser is disabled then anyway).
+    // Updates persist via repo.update so the next start() picks them up.
+
     fun setCodec(c: Codec) {
-        // Clamp bitrate into the new codec's ladder so the chooser never shows an invalid value.
+        val p = selectedProfile.value ?: return
         val ladder = if (c == Codec.AAC) AudioConfigRules.AAC_BITRATES else AudioConfigRules.MP3_BITRATES
-        _codec.value = c
-        if (_bitrate.value !in ladder) {
-            _bitrate.value = ladder.minBy { kotlin.math.abs(it - _bitrate.value) }
-        }
-        enforceHeAac(c, _bitrate.value)
+        val newBitrate = if (p.bitrateKbps in ladder) p.bitrateKbps
+        else ladder.minBy { kotlin.math.abs(it - p.bitrateKbps) }
+        val newMono = if (AudioConfigRules.needsHeAac(c, newBitrate)) true else p.mono
+        updateProfileAudio(p.copy(codec = c.name, bitrateKbps = newBitrate, mono = newMono))
     }
 
     fun setBitrate(kbps: Int) {
-        _bitrate.value = kbps
-        enforceHeAac(_codec.value, kbps)
+        val p = selectedProfile.value ?: return
+        val newMono = if (AudioConfigRules.needsHeAac(p.codecEnum(), kbps)) true else p.mono
+        updateProfileAudio(p.copy(bitrateKbps = kbps, mono = newMono))
     }
 
-    fun setSampleRate(hz: Int) { _sampleRate.value = hz }
+    fun setSampleRate(hz: Int) {
+        val p = selectedProfile.value ?: return
+        updateProfileAudio(p.copy(sampleRateHz = hz))
+    }
 
     fun setMono(b: Boolean) {
+        val p = selectedProfile.value ?: return
         // AAC 16/24 must be mono per AudioConfigRules; the toggle is forced off there.
-        if (AudioConfigRules.needsHeAac(_codec.value, _bitrate.value) && !b) return
-        _mono.value = b
+        if (AudioConfigRules.needsHeAac(p.codecEnum(), p.bitrateKbps) && !b) return
+        updateProfileAudio(p.copy(mono = b))
     }
 
-    private fun enforceHeAac(codec: Codec, bitrate: Int) {
-        if (AudioConfigRules.needsHeAac(codec, bitrate)) {
-            _mono.value = true
+    /** Persists audio-field changes on the selected profile (background). */
+    private fun updateProfileAudio(p: ProfileEntity) {
+        viewModelScope.launch { repo.update(p) }
+    }
+
+    // ---- Profile CRUD ----
+
+    /** Insert (id == 0) or update; selects the saved profile and surfaces a confirmation. */
+    fun saveProfile(p: ProfileEntity, onSelect: (Long) -> Unit = {}) {
+        viewModelScope.launch {
+            val id = if (p.id == 0L) repo.save(p) else { repo.update(p); p.id }
+            _selectedProfileId.value = id
+            onSelect(id)
+            _userMessage.value = "Saved ${p.name}"
         }
     }
+
+    fun deleteProfile(p: ProfileEntity) {
+        viewModelScope.launch {
+            repo.delete(p)
+            if (_selectedProfileId.value == p.id) _selectedProfileId.value = null
+            _userMessage.value = "Deleted ${p.name}"
+        }
+    }
+
+    fun clearAllProfiles() {
+        viewModelScope.launch {
+            val all = profiles.value
+            all.forEach { repo.delete(it) }
+            _selectedProfileId.value = null
+            _userMessage.value = if (all.isEmpty()) "No profiles to clear" else "Cleared ${all.size} profile${if (all.size == 1) "" else "s"}"
+        }
+    }
+
+    suspend fun getProfile(id: Long): ProfileEntity? = repo.byId(id)
 
     fun consumeMessage() { _userMessage.value = null }
 
@@ -167,6 +226,9 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
             _permissionsNeeded.value = needed
             return
         }
+        // Capture the profile snapshot the stream is being started against, so we can
+        // detect later divergence while Live (chooser tuning the profile mid-stream).
+        _startSnapshot.value = selectedProfile.value
         ServiceController.start(ctx, profileId)
     }
 
@@ -181,6 +243,7 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         pendingStartProfileId = null
         if (id == null) return
         if (results.values.all { it }) {
+            _startSnapshot.value = selectedProfile.value
             ServiceController.start(getApplication(), id)
         } else {
             _userMessage.value = "Microphone permission required to broadcast"
@@ -203,4 +266,7 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
             context.checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED
         }
     }
+
+    private fun ProfileEntity.codecEnum(): Codec =
+        runCatching { Codec.valueOf(codec.trim().uppercase()) }.getOrDefault(Codec.MP3)
 }

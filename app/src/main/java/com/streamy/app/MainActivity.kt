@@ -21,13 +21,13 @@ import androidx.lifecycle.lifecycleScope
 import com.streamy.app.service.ServiceController
 import com.streamy.app.service.StreamService
 import com.streamy.app.service.StreamState
-import com.streamy.app.ui.HomeScreen
+import com.streamy.app.ui.StreamyNavigation
 import com.streamy.app.ui.StreamyTheme
 import com.streamy.app.ui.StreamyViewModel
 import kotlinx.coroutines.launch
 
 /**
- * Hosts the single Home screen + the [StreamService] ServiceConnection.
+ * Hosts the [StreamyNavigation] NavHost + the [StreamService] ServiceConnection.
  *
  * Wiring shape:
  * - [StreamyViewModel] is the source of truth for UI state; this Activity owns only the
@@ -38,9 +38,7 @@ import kotlinx.coroutines.launch
  *   result map back via [StreamyViewModel.onPermissionsResult]. The VM decides whether
  *   to retry start.
  *
- * ponytail: when a second screen (profiles / settings) lands in 12b, swap the inline
- * Home for a NavHost and pass navigation callbacks through. One screen is simpler
- * today (YAGNI) — no navigation dependency.
+ * ponytail: type-safe nav (kotlinx-serialization routes) when destinations grow.
  *
  * ponytail: swap the manual viewModelFactory shim for Hilt @HiltViewModel in Task 14.
  */
@@ -91,12 +89,7 @@ class MainActivity : ComponentActivity() {
                         if (perms.isNotEmpty()) permissionLauncher.launch(perms.toTypedArray())
                     }
 
-                    HomeScreen(
-                        vm = vm,
-                        onManageProfiles = {
-                            // ponytail: Task 12b routes to the profiles destination.
-                        },
-                    )
+                    StreamyNavigation(vm = vm)
                 }
             }
         }

@@ -12,20 +12,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -46,22 +42,28 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.service.StreamState
 
+/*
+ * Hallmark · screen: Home · macrostructure: Workbench (broadcast console) · theme: custom
+ * (atmospheric cluster · "late-night tally light") — reuses Theme.kt tokens.
+ */
+
 /**
- * Single-screen broadcast console. Stateless-ish: pulls from [vm] state, emits via vm
- * mutators. The hero element is the tally-lamp Start/Stop control — hard slab, on-air
- * red when armed, signal green when Live.
+ * Single-screen broadcast console. Pulls from [vm] state, emits via vm mutators. The hero
+ * element is the tally-lamp Start/Stop control — hard slab, on-air red when armed, signal
+ * green when Live.
+ *
+ * The chooser is bound to the SELECTED profile via [vm]: changing codec/bitrate/sample/
+ * mono tunes the profile row in place. When no profile is selected, the chooser is
+ * disabled with a "select a profile first" hint.
  *
  * ponytail: VU meter + local recording toggle — add RMS callback to
- * AudioCapture/AudioPipeline, then surface here. The plan marked them optional and
- * the AudioCapture API doesn't yet expose an RMS hook.
- *
- * ponytail: profile management screen (Task 12b) — onManageProfiles is a placeholder
- * callback wired to a button now; MainActivity (or a NavHost) replaces it in 12b.
+ * AudioCapture/AudioPipeline, then surface here.
  */
 @Composable
 fun HomeScreen(
     vm: StreamyViewModel,
     onManageProfiles: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by vm.streamState.collectAsStateWithLifecycle()
@@ -69,6 +71,11 @@ fun HomeScreen(
     val selectedProfile by vm.selectedProfile.collectAsStateWithLifecycle()
     val message by vm.userMessage.collectAsStateWithLifecycle()
     val needsRestart by vm.needsRestartToApply.collectAsStateWithLifecycle()
+
+    val codec by vm.codec.collectAsStateWithLifecycle()
+    val bitrate by vm.bitrate.collectAsStateWithLifecycle()
+    val sampleRate by vm.sampleRate.collectAsStateWithLifecycle()
+    val mono by vm.mono.collectAsStateWithLifecycle()
 
     val snackbarHost = remember { SnackbarHostState() }
     LaunchedEffect(message) {
@@ -80,6 +87,8 @@ fun HomeScreen(
 
     val isLive = state is StreamState.Live
     val isBusy = state is StreamState.Connecting || state is StreamState.Reconnecting
+    val hasProfile = selectedProfile != null
+    val chooserEnabled = !isLive && !isBusy && hasProfile
 
     Box(modifier.fillMaxSize()) {
         Column(
@@ -90,13 +99,13 @@ fun HomeScreen(
                 .padding(top = 24.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(28.dp),
         ) {
-            Masthead()
+            Masthead(onOpenSettings = onOpenSettings)
 
             StatePill(state = state)
 
             HeroControl(
                 state = state,
-                enabled = !isBusy,
+                enabled = !isBusy && hasProfile,
                 onStart = vm::start,
                 onStop = vm::stop,
             )
@@ -115,13 +124,21 @@ fun HomeScreen(
                 onManageProfiles = onManageProfiles,
             )
 
-            BitrateChooser(
-                vm = vm,
-                enabled = !isLive && !isBusy,
-            )
-
-            // ponytail: VU meter + local recording — add RMS callback to AudioCapture/
-            // AudioPipeline, then surface here as a meter row + a toggle.
+            if (hasProfile) {
+                BitrateChooser(
+                    codec = codec,
+                    bitrate = bitrate,
+                    sampleRate = sampleRate,
+                    mono = mono,
+                    enabled = chooserEnabled,
+                    onCodec = vm::setCodec,
+                    onBitrate = vm::setBitrate,
+                    onSampleRate = vm::setSampleRate,
+                    onMono = vm::setMono,
+                )
+            } else {
+                NoProfileHint(onManageProfiles = onManageProfiles)
+            }
         }
 
         SnackbarHost(
@@ -134,19 +151,31 @@ fun HomeScreen(
 // ---- Masthead ----
 
 @Composable
-private fun Masthead() {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            text = "STREAMY",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            letterSpacing = 6.sp,
-        )
-        Text(
-            text = "On-air console",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+private fun Masthead(onOpenSettings: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = "STREAMY",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 6.sp,
+            )
+            Text(
+                text = "On-air console",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        TextButton(
+            onClick = onOpenSettings,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        ) {
+            Text("SETTINGS", style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 
@@ -337,6 +366,42 @@ private fun ProfileChip(
             ) {
                 Text("MANAGE", style = MaterialTheme.typography.labelLarge)
             }
+        }
+    }
+}
+
+// ---- Empty-state hint (no profile selected) ----
+
+@Composable
+private fun NoProfileHint(onManageProfiles: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline,
+                shape = RoundedCornerShape(6.dp),
+            )
+            .padding(horizontal = 14.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            "Select a profile first",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            "Codec, bitrate, sample rate, and channels tune the selected server profile. " +
+                "Add or pick one to start broadcasting.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TextButton(
+            onClick = onManageProfiles,
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+        ) {
+            Text("MANAGE PROFILES", style = MaterialTheme.typography.labelLarge)
         }
     }
 }
