@@ -19,6 +19,14 @@ class Mp3Encoder(
 
     init { check(ptr != 0L) { "lame_init_params failed" } }
 
+    private var closed = false
+    override fun close() {
+        // Idempotent: AutoCloseable contract + guards double lame_close (UB on freed handle).
+        if (closed) return
+        closed = true
+        nativeClose(ptr)
+    }
+
     override fun encode(pcm: ShortArray): List<ByteArray> {
         // LAME worst-case: 1.25x + 7200 bytes per frame (per LAME docs).
         val maxOut = pcm.size * 5 / 4 + 7200
@@ -32,8 +40,6 @@ class Mp3Encoder(
         val n = nativeFlush(ptr, out)
         return if (n > 0) listOf(out.copyOf(n)) else emptyList()
     }
-
-    override fun close() = nativeClose(ptr)
 
     private external fun nativeInit(sampleRate: Int, channels: Int, bitrateKbps: Int): Long
     private external fun nativeEncode(ptr: Long, pcm: ShortArray, n: Int, channels: Int, out: ByteArray): Int
