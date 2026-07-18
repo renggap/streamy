@@ -5,6 +5,8 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+import java.util.Properties
+
 android {
     namespace = "com.streamy.app"
     compileSdk = 35
@@ -24,6 +26,16 @@ android {
                 arguments += listOf("-DANDROID_STL=c++_static")
             }
         }
+
+        // Instrumented integration test targets a real DNAS2 server. Creds come from
+        // local.properties (gitignored) via BuildConfig so secrets never enter source control.
+        val lp = Properties()
+        rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { lp.load(it) }
+        fun lp(k: String, default: String): String = lp.getProperty(k) ?: default
+        buildConfigField("String", "TEST_HOST", "\"${lp("streamy.test.host", "")}\"")
+        buildConfigField("int", "TEST_PORT", lp("streamy.test.port", "0"))
+        buildConfigField("String", "TEST_PASSWORD", "\"${lp("streamy.test.password", "")}\"")
+        buildConfigField("int", "TEST_SID", lp("streamy.test.sid", "1"))
     }
 
     externalNativeBuild {
@@ -53,6 +65,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -72,4 +85,5 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.truth)
+    androidTestImplementation("androidx.test:rules:1.6.1")
 }
