@@ -1,0 +1,26 @@
+LAME 3.100 — LGPL notice
+
+This product includes LAME (LAME Ain't an MP3 Encoder), version 3.100,
+developed by the LAME Project (https://lame.sourceforge.io/).
+
+LAME is free software; you can redistribute it and/or modify it under the
+terms of the GNU Lesser General Public License as published by the Free
+Software Foundation; either version 2, or (at your option) any later version.
+
+LAME is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+details.
+
+A copy of the GNU Lesser General Public License is available at
+https://www.gnu.org/licenses/old-licenses/lgpl-2.0.html.
+
+MP3 encoding technology may be subject to patent coverage in some
+jurisdictions; this product does not grant any patent license.
+
+Source offer (LGPL v2.1 §6): The complete corresponding machine-readable
+source code for LAME 3.100 used in this product — including all build scripts
+used to produce it — is available from the authors of Streamy for at least
+three years after distribution of this product. To obtain it, write to:
+Streamy maintainers, source-offer@streamy.example (replace with a valid
+contact before any public release).
