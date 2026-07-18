@@ -62,20 +62,22 @@ fun EditProfileScreen(
 ) {
     val isNew = profileId == null || profileId == 0L
 
-    var name by remember { mutableStateOf("") }
-    var host by remember { mutableStateOf("") }
-    var port by remember { mutableStateOf("8000") }
-    var sid by remember { mutableStateOf("1") }
-    var password by remember { mutableStateOf("") }
-    var mount by remember { mutableStateOf("/stream") }
-    var codec by remember { mutableStateOf(Codec.MP3) }
-    var bitrate by remember { mutableStateOf(128) }
-    var sampleRate by remember { mutableStateOf(44_100) }
-    var mono by remember { mutableStateOf(true) }
+    // I7: key every editable field on profileId so navigating edit/A -> back -> edit/B
+    // doesn't show A's stale values. When profileId changes, remember re-initializes.
+    var name by remember(profileId) { mutableStateOf("") }
+    var host by remember(profileId) { mutableStateOf("") }
+    var port by remember(profileId) { mutableStateOf("8000") }
+    var sid by remember(profileId) { mutableStateOf("1") }
+    var password by remember(profileId) { mutableStateOf("") }
+    var mount by remember(profileId) { mutableStateOf("/stream") }
+    var codec by remember(profileId) { mutableStateOf(Codec.MP3) }
+    var bitrate by remember(profileId) { mutableStateOf(128) }
+    var sampleRate by remember(profileId) { mutableStateOf(44_100) }
+    var mono by remember(profileId) { mutableStateOf(true) }
 
-    var showPassword by remember { mutableStateOf(false) }
-    var pendingDelete by remember { mutableStateOf(false) }
-    var loaded by remember { mutableStateOf(!isNew) }
+    var showPassword by remember(profileId) { mutableStateOf(false) }
+    var pendingDelete by remember(profileId) { mutableStateOf(false) }
+    var loaded by remember(profileId) { mutableStateOf(!isNew) }
 
     // Load existing profile into the form once.
     LaunchedEffect(profileId) {

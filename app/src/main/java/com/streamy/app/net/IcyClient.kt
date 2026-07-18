@@ -30,25 +30,49 @@ class IcyClient(
     private var inStream: InputStream? = null
 
     fun connect(bitrateKbps: Int, name: String, genre: String) {
-        val s = Socket(host, port).apply { tcpNoDelay = true; soTimeout = LOGIN_TIMEOUT_MS }
-        socket = s
-        val o = s.getOutputStream(); out = o
-        val input = s.getInputStream(); inStream = input
+        // Close any prior socket so a reconnect never leaks the old one (also nukes stale
+        // out/inStream so a concurrent send() throws "client closed" instead of writing to a
+        // dead stream).
+        try { socket?.close() } catch (_: Throwable) {}
+        socket = null; out = null; inStream = null
 
-        // 1) password line
-        o.write((password + "\r\n").toByteArray(Charsets.US_ASCII)); o.flush()
-        // 2) read OK2 + caps, up to the blank line
-        val hello = readUntilBlankLine(input)
-        if (!hello.contains("OK2", ignoreCase = true)) {
-            throw ProtocolException("source login rejected: ${hello.take(120)}")
+        val s = Socket(host, port).apply {
+            tcpNoDelay = true
+            keepAlive = true   // I2: let TCP probe black-holed peers eventually
+            soTimeout = LOGIN_TIMEOUT_MS
         }
-        // 3) icy headers
-        o.write(buildHeaderBlock(bitrateKbps, name, genre)); o.flush()
-        // Server goes silent and waits for audio; drop the read timeout so send() isn't bounded by it.
-        s.soTimeout = 0
+        try {
+            socket = s
+            val o = s.getOutputStream(); out = o
+            val input = s.getInputStream(); inStream = input
+
+            // 1) password line
+            o.write((password + "\r\n").toByteArray(Charsets.US_ASCII)); o.flush()
+            // 2) read OK2 + caps, up to the blank line
+            val hello = readUntilBlankLine(input)
+            if (!hello.contains("OK2", ignoreCase = true)) {
+                throw ProtocolException("source login rejected: ${hello.take(120)}")
+            }
+            // 3) icy headers
+            o.write(buildHeaderBlock(bitrateKbps, name, genre)); o.flush()
+            // Server goes silent and waits for audio; drop the read timeout so send() isn't bounded by it.
+            s.soTimeout = 0
+        } catch (e: Throwable) {
+            // Login failure: close the new socket so we don't leak it, clear state, rethrow
+            // so StreamTransport's reconnect loop sees the error.
+            try { s.close() } catch (_: Throwable) {}
+            socket = null; out = null; inStream = null
+            throw e
+        }
     }
 
-    fun send(frame: ByteArray) { out!!.write(frame); out!!.flush() }
+    // ponytail: no write-side timeout — keepAlive probes only fire after the OS's TCP_KEEPIDLE
+    // (~2h on Linux), so a black-holed peer can wedge send() indefinitely. Wrap send() in
+    // withTimeout once the transport owns a coroutine-based writer; deferred (Task: writer-timeout).
+    fun send(frame: ByteArray) {
+        val o = out ?: throw java.io.IOException("client closed")
+        o.write(frame); o.flush()
+    }
 
     fun close() {
         try { socket?.close() } catch (_: Throwable) {} finally { socket = null; out = null; inStream = null }

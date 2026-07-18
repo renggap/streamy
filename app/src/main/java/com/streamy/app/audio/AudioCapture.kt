@@ -20,7 +20,8 @@ class AudioCapture(
     private val channelConfig =
         if (mono) AudioFormat.CHANNEL_IN_MONO else AudioFormat.CHANNEL_IN_STEREO
     private var record: AudioRecord? = null
-    private var running = false
+    @Volatile private var running = false
+    private var thread: Thread? = null
 
     /** Called repeatedly with a freshly-filled buffer; return false to stop. */
     fun start(onFrame: (ShortArray) -> Boolean) {
@@ -36,7 +37,7 @@ class AudioCapture(
         check(record?.state == AudioRecord.STATE_INITIALIZED) { "AudioRecord not initialized" }
         record!!.startRecording()
         running = true
-        thread(name = "streamy-audio", isDaemon = true) {
+        thread = kotlin.concurrent.thread(name = "streamy-audio", isDaemon = true) {
           val buf = ShortArray(frameSamples * (if (mono) 1 else 2))
           while (running) {
               val n = record!!.read(buf, 0, buf.size)
@@ -49,5 +50,9 @@ class AudioCapture(
         running = false
         record?.run { try { stop() } finally { release() } }
         record = null
+        // Best-effort join so the audio thread can't call encode() after we tear down;
+        // bounded by 500ms + try/catch so a stuck thread can't wedge stop().
+        try { thread?.join(500) } catch (_: InterruptedException) {}
+        thread = null
     }
 }

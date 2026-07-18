@@ -9,6 +9,11 @@ class StreamTransport(
     private val scope: CoroutineScope,
     private val connect: suspend () -> Unit,        // runs full handshake
     private val send: (ByteArray) -> Unit,
+    /**
+     * State-change callback. For [TransportState.Backpressure] this fires INLINE on the
+     * audio capture thread (via [enqueue]) — it MUST be non-blocking; offload any heavy
+     * work. Other states fire on this transport's own coroutine.
+     */
     private val onState: (TransportState) -> Unit,
 ) {
     private val queue = Channel<ByteArray>(CAPACITY)
@@ -40,11 +45,17 @@ class StreamTransport(
                 } catch (e: Throwable) {
                     if (stopped) break
                     attempt++
+                    if (shouldGiveUp(attempt)) {
+                        // Wrong password / unreachable host: terminate instead of looping forever.
+                        onState(TransportState.Failed("gave_up after $attempt attempts"))
+                        break
+                    }
                     onState(TransportState.Backoff(attempt, nextBackoffMs(attempt)))
                     delay(nextBackoffMs(attempt))
                 }
             }
-            onState(TransportState.Failed("stopped")) // only reached when stopped==true
+            // Loop only exits on stop() or give-up — both already emitted their terminal
+            // state. No spurious Failed("stopped"): Stop is signaled by StreamService -> Idle.
         }
     }
 

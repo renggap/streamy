@@ -27,8 +27,11 @@ Java_com_streamy_app_audio_Mp3Encoder_nativeEncode(
         JNIEnv* env, jobject /*this*/, jlong ptr, jshortArray pcm, jint n, jint channels,
         jbyteArray out) {
     lame_t g = reinterpret_cast<lame_t>(ptr);
+    if (!g) return -1;
     jshort* in = env->GetShortArrayElements(pcm, nullptr);
+    if (in == nullptr) return -1;
     jbyte* o = env->GetByteArrayElements(out, nullptr);
+    if (o == nullptr) { env->ReleaseShortArrayElements(pcm, in, JNI_ABORT); return -1; }
     int outSize = env->GetArrayLength(out);
     int written;
     if (channels == 1) {
@@ -48,7 +51,9 @@ extern "C" JNIEXPORT jint JNICALL
 Java_com_streamy_app_audio_Mp3Encoder_nativeFlush(
         JNIEnv* env, jobject /*this*/, jlong ptr, jbyteArray out) {
     lame_t g = reinterpret_cast<lame_t>(ptr);
+    if (!g) return -1;
     jbyte* o = env->GetByteArrayElements(out, nullptr);
+    if (o == nullptr) return -1;
     int outSize = env->GetArrayLength(out);
     int w = lame_encode_flush(g, reinterpret_cast<unsigned char*>(o), outSize);
     env->ReleaseByteArrayElements(out, o, 0);

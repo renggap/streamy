@@ -157,6 +157,11 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setBitrate(kbps: Int) {
         val p = selectedProfile.value ?: return
+        // I8: reject out-of-ladder bitrates instead of silently persisting an impossible value.
+        // Throws IllegalArgumentException — callers surface it as a user message, not a silent write.
+        val ladder = if (p.codecEnum() == Codec.AAC) AudioConfigRules.AAC_BITRATES
+                     else AudioConfigRules.MP3_BITRATES
+        require(kbps in ladder) { "bitrate $kbps not in ladder $ladder" }
         val newMono = if (AudioConfigRules.needsHeAac(p.codecEnum(), kbps)) true else p.mono
         updateProfileAudio(p.copy(bitrateKbps = kbps, mono = newMono))
     }
@@ -269,4 +274,10 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun ProfileEntity.codecEnum(): Codec =
         runCatching { Codec.valueOf(codec.trim().uppercase()) }.getOrDefault(Codec.MP3)
+
+    override fun onCleared() {
+        super.onCleared()
+        // Close the VM-side Room handle so the SQLiteDatabase isn't left open after the VM dies.
+        runCatching { db.close() }
+    }
 }

@@ -101,7 +101,7 @@ class StreamService : Service() {
     private fun startWithProfile(profileId: Long) {
         // Fresh start: clear any prior shutdown so a subsequent teardown actually runs
         // (matters when the bound service instance is reused across Stop -> Start).
-        shuttingDown = false
+        synchronized(this) { shuttingDown = false }
         scope.launch {
             try {
                 val profile = db.profileDao().byId(profileId)
@@ -112,42 +112,48 @@ class StreamService : Service() {
                 }
                 profileName = profile.name
                 val cfg = ProfileRepository.toAudioConfig(profile)
-                val enc = EncoderFactory.create(cfg)
-                encoder = enc
 
-                // If the user stopped while we were setting up, release what we built and bail
-                // (prevents a leaked pipeline/transport restarting after Stop).
-                if (shuttingDown) {
-                    runCatching { enc.close() }
-                    encoder = null
-                    return@launch
-                }
+                // Heavy setup OUTSIDE the monitor: native encoder alloc + IcyClient ctor
+                // (no socket yet — connect() runs later from the transport coroutine).
+                val enc = EncoderFactory.create(cfg)
 
                 // IcyClient speaks the SHOUTcast v1 source protocol — verified live against
                 // DNAS2 v2.6.1 (raw MP3, no Ultravox needed). AAC-over-v1 on DNAS2 is unverified;
                 // MP3 is the proven path. See docs/plans/2026-07-18-uvox-finding.md.
                 val icy = IcyClient(profile.host, profile.port, profile.password, profile.mount)
-                client = icy
 
-                _state.value = StreamState.Connecting
-                val t = StreamTransport(
-                    scope = scope,
-                    connect = { icy.connect(cfg.bitrateKbps, profile.name, "Speech") },
-                    send = { icy.send(it) },
-                    onState = { ts -> ts.toStreamState()?.let { s -> _state.value = s } },
-                )
-                transport = t
-                acquireLocks()
-                t.start()
-                pipeline = AudioPipeline(
-                    capture = AudioCapture(cfg.sampleRateHz, cfg.mono),
-                    encoder = enc,
-                    transport = t,
-                    onMicBusy = {
-                        _state.value = StreamState.Error("mic_busy")
-                        stopAndShutdown()
-                    },
-                ).also { it.start() }
+                // Assign + start under the monitor so a concurrent Stop can't orphan the
+                // transport / audio thread / native encoder. Re-check shuttingDown in case a
+                // Stop arrived during the setup above — if so, tear down what we just built.
+                synchronized(this) {
+                    if (shuttingDown) {
+                        runCatching { enc.close() }
+                        return@launch
+                    }
+                    encoder = enc
+                    client = icy
+                    _state.value = StreamState.Connecting
+                    val t = StreamTransport(
+                        scope = scope,
+                        connect = { icy.connect(cfg.bitrateKbps, profile.name, "Speech") },
+                        send = { icy.send(it) },
+                        onState = { ts -> ts.toStreamState()?.let { s -> _state.value = s } },
+                    )
+                    transport = t
+                    val p = AudioPipeline(
+                        capture = AudioCapture(cfg.sampleRateHz, cfg.mono),
+                        encoder = enc,
+                        transport = t,
+                        onMicBusy = {
+                            _state.value = StreamState.Error("mic_busy")
+                            stopAndShutdown()
+                        },
+                    )
+                    pipeline = p
+                    acquireLocks()
+                    t.start()
+                    p.start()
+                }
             } catch (e: Throwable) {
                 Log.e(TAG, "start failed", e)
                 _state.value = StreamState.Error(e.message ?: "start_failed")
@@ -227,6 +233,9 @@ class StreamService : Service() {
     override fun onDestroy() {
         // Defensive: if process kill/recycle happens before ACTION_STOP, drop everything.
         try { stopAndShutdown() } catch (_: Throwable) {}
+        // Close the Room db here (not in stopAndShutdown) so it isn't re-closed on each
+        // stop/start cycle within one instance. runCatching guards the `by lazy` init.
+        runCatching { db.close() }
         scope.cancel()
         super.onDestroy()
     }

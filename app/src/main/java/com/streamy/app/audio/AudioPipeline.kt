@@ -37,10 +37,12 @@ class AudioPipeline(
         }
     }
 
-    /** Flush the encoder's trailing frames into the transport, then stop capture. */
+    /** Stop+join capture FIRST so the audio thread can't call encode() while we flush, then
+     *  drain the encoder's trailing frames into the transport. (encoder.flush happens-after
+     *  the capture thread has exited.) */
     fun stop() {
-        for (frame in encoder.flush()) transport.enqueue(frame)
         capture.stop()
+        for (frame in encoder.flush()) transport.enqueue(frame)
     }
 
     companion object {
