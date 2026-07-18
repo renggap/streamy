@@ -1,0 +1,4 @@
+<resources>
+    <!-- Minimal theme; Compose renders its own UI. Task 14 may swap for a branded base. -->
+    <style name="Theme.Streamy" parent="android:Theme.Material.Light.NoActionBar"/>
+</resources>
