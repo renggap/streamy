@@ -26,6 +26,12 @@ class AudioConfigRulesTest {
             AudioConfigRules.validate(AudioConfig(Codec.MP3, 77, 44100, mono = true))
         }
     }
+
+    @Test fun validate_rejects_unknown_sample_rate() {
+        assertThrows<IllegalArgumentException> {
+            AudioConfigRules.validate(AudioConfig(Codec.MP3, 128, 99999, mono = true))
+        }
+    }
 }
 
 inline fun <reified T : Throwable> assertThrows(block: () -> Unit) {

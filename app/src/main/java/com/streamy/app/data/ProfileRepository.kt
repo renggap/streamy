@@ -17,22 +17,26 @@ class ProfileRepository(private val dao: ProfileDao) {
 
     suspend fun save(p: ProfileEntity): Long = dao.insert(p)
 
+    suspend fun update(p: ProfileEntity) = dao.update(p)
+
     suspend fun delete(p: ProfileEntity) = dao.delete(p)
 
-    /**
-     * Resolve a stored profile into a validated [AudioConfig]. Codec string is
-     * matched case-insensitively. Throws [IllegalArgumentException] for unknown
-     * codecs or impossible bitrate/sample-rate/mono combos.
-     */
-    fun toAudioConfig(p: ProfileEntity): AudioConfig {
-        val codec = Codec.valueOf(p.codec.uppercase())
-        return AudioConfigRules.validate(
-            AudioConfig(
-                codec = codec,
-                bitrateKbps = p.bitrateKbps,
-                sampleRateHz = p.sampleRateHz,
-                mono = p.mono,
+    companion object {
+        /**
+         * Resolve a stored profile into a validated [AudioConfig]. Codec string is
+         * trimmed and matched case-insensitively. Throws [IllegalArgumentException]
+         * for unknown codecs or impossible bitrate/sample-rate/mono combos.
+         */
+        fun toAudioConfig(p: ProfileEntity): AudioConfig {
+            val codec = Codec.valueOf(p.codec.trim().uppercase())
+            return AudioConfigRules.validate(
+                AudioConfig(
+                    codec = codec,
+                    bitrateKbps = p.bitrateKbps,
+                    sampleRateHz = p.sampleRateHz,
+                    mono = p.mono,
+                )
             )
-        )
+        }
     }
 }
