@@ -1,54 +1,87 @@
 package com.streamy.app.net
 
-import java.io.OutputStream
+import java.io.InputStream
 import java.net.Socket
 
-/** Legacy HTTP/ICY source client. DNAS2 (v2) accepts it in legacy mode; Icecast2 accepts it. */
+/**
+ * SHOUTcast **v1 source** client (the "ICY" source protocol). Verified against a live
+ * DNAS2 v2.6.1 server: DNAS2 accepts this legacy source protocol and goes live with raw
+ * MP3 bytes — no Ultravox framing required for MP3. (See docs/plans/2026-07-18-uvox-finding.md.)
+ *
+ * Wire sequence:
+ *  1. connect TCP
+ *  2. send `<password>\r\n`
+ *  3. server replies `OK2\r\nicy-caps:<flags>\r\n\r\n`
+ *  4. send icy headers (`icy-name`, `icy-genre`, `icy-br`, `icy-pub`, `icy-url`, …) + `\r\n\r\n`
+ *  5. stream raw encoded frames via [send]
+ *
+ * AAC-over-v1 on DNAS2 is unverified (MP3 is the proven path); do not assume this client
+ * works for AAC against DNAS2 without a live check. `send()` propagates IOException on a broken
+ * socket so [StreamTransport] can reconnect.
+ */
 class IcyClient(
     private val host: String,
     private val port: Int,
     private val password: String,
-    private val mount: String,
+    private val mount: String,   // unused by the v1 login (DNAS2 maps by source creds/sid); kept for Icecast parity / future use
 ) {
     private var socket: Socket? = null
-    private var out: OutputStream? = null
+    private var out: java.io.OutputStream? = null
+    private var inStream: InputStream? = null
 
-    /** @param contentType "audio/mpeg" or "audio/aacp" */
-    fun connect(contentType: String, bitrateKbps: Int, name: String, genre: String) {
-        val s = Socket(host, port); socket = s; s.tcpNoDelay = true
-        val req = buildHandshake(mount, "$host:$port", contentType, bitrateKbps, name, genre, password)
-        val o = s.getOutputStream(); o.write(req); o.flush(); out = o
-        val reader = s.getInputStream().bufferedReader()
-        val status = reader.readLine() ?: throw ProtocolException("empty response")
-        if (!status.contains("200")) throw ProtocolException("server said: $status")
-        // Drain remaining response headers (read until blank line) so the socket's input
-        // buffer doesn't hold stale header bytes for the lifetime of the source connection.
-        while (true) {
-            val line = reader.readLine() ?: break
-            if (line.isEmpty()) break
+    fun connect(bitrateKbps: Int, name: String, genre: String) {
+        val s = Socket(host, port).apply { tcpNoDelay = true; soTimeout = LOGIN_TIMEOUT_MS }
+        socket = s
+        val o = s.getOutputStream(); out = o
+        val input = s.getInputStream(); inStream = input
+
+        // 1) password line
+        o.write((password + "\r\n").toByteArray(Charsets.US_ASCII)); o.flush()
+        // 2) read OK2 + caps, up to the blank line
+        val hello = readUntilBlankLine(input)
+        if (!hello.contains("OK2", ignoreCase = true)) {
+            throw ProtocolException("source login rejected: ${hello.take(120)}")
         }
+        // 3) icy headers
+        o.write(buildHeaderBlock(bitrateKbps, name, genre)); o.flush()
+        // Server goes silent and waits for audio; drop the read timeout so send() isn't bounded by it.
+        s.soTimeout = 0
     }
 
     fun send(frame: ByteArray) { out!!.write(frame); out!!.flush() }
 
-    fun close() { try { socket?.close() } finally { socket = null; out = null } }
+    fun close() {
+        try { socket?.close() } catch (_: Throwable) {} finally { socket = null; out = null; inStream = null }
+    }
+
+    /** Read ASCII until a blank line (\r\n\r\n). Returns what was read. */
+    private fun readUntilBlankLine(input: InputStream): String {
+        val sb = StringBuilder()
+        val buf = ByteArray(256)
+        while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            sb.append(String(buf, 0, n, Charsets.US_ASCII))
+            if (sb.contains("\r\n\r\n") || sb.length > MAX_HELLO_LEN) break
+        }
+        return sb.toString()
+    }
 
     companion object {
-        fun buildHandshake(
-            mount: String, host: String, contentType: String,
-            bitrateKbps: Int, name: String, genre: String, password: String,
-        ): ByteArray {
-            val auth = java.util.Base64.getEncoder().encodeToString("source:$password".toByteArray())
+        private const val LOGIN_TIMEOUT_MS = 5_000
+        private const val MAX_HELLO_LEN = 4_096
+
+        /** Pure: builds the v1 icy-header block (testable without a socket). */
+        fun buildHeaderBlock(bitrateKbps: Int, name: String, genre: String): ByteArray {
             val sb = StringBuilder()
-            sb.append("PUT ").append(mount).append(" HTTP/1.1\r\n")
-            sb.append("Host: ").append(host).append("\r\n")
-            sb.append("Authorization: Basic ").append(auth).append("\r\n")
-            sb.append("Content-Type: ").append(contentType).append("\r\n")
-            sb.append("ice-bitrate: ").append(bitrateKbps).append("\r\n")
-            sb.append("ice-name: ").append(name).append("\r\n")
-            sb.append("ice-genre: ").append(genre).append("\r\n")
-            sb.append("ice-public: 1\r\n")
-            sb.append("ice-url: https://streamy.app\r\n")
+            sb.append("icy-name:").append(name).append("\r\n")
+            sb.append("icy-genre:").append(genre).append("\r\n")
+            sb.append("icy-br:").append(bitrateKbps).append("\r\n")
+            sb.append("icy-pub:1\r\n")
+            sb.append("icy-url:http://streamy.app\r\n")
+            sb.append("icy-irc:N/A\r\n")
+            sb.append("icy-icq:N/A\r\n")
+            sb.append("icy-aim:N/A\r\n")
             sb.append("\r\n")
             return sb.toString().toByteArray(Charsets.US_ASCII)
         }

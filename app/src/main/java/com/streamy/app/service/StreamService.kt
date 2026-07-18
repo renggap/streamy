@@ -123,19 +123,16 @@ class StreamService : Service() {
                     return@launch
                 }
 
-                // TODO(Task 8): swap for/add UvoxClient as primary, keep IcyClient as fallback.
+                // IcyClient speaks the SHOUTcast v1 source protocol — verified live against
+                // DNAS2 v2.6.1 (raw MP3, no Ultravox needed). AAC-over-v1 on DNAS2 is unverified;
+                // MP3 is the proven path. See docs/plans/2026-07-18-uvox-finding.md.
                 val icy = IcyClient(profile.host, profile.port, profile.password, profile.mount)
                 client = icy
-                val contentType = when (enc.mime) {
-                    "audio/mpeg" -> "audio/mpeg"
-                    "audio/aac"  -> "audio/aacp"
-                    else         -> enc.mime
-                }
 
                 _state.value = StreamState.Connecting
                 val t = StreamTransport(
                     scope = scope,
-                    connect = { icy.connect(contentType, cfg.bitrateKbps, profile.name, "Speech") },
+                    connect = { icy.connect(cfg.bitrateKbps, profile.name, "Speech") },
                     send = { icy.send(it) },
                     onState = { ts -> ts.toStreamState()?.let { s -> _state.value = s } },
                 )
