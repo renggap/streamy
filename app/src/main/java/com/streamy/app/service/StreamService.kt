@@ -99,6 +99,9 @@ class StreamService : Service() {
     }
 
     private fun startWithProfile(profileId: Long) {
+        // Fresh start: clear any prior shutdown so a subsequent teardown actually runs
+        // (matters when the bound service instance is reused across Stop -> Start).
+        shuttingDown = false
         scope.launch {
             try {
                 val profile = db.profileDao().byId(profileId)
@@ -111,6 +114,14 @@ class StreamService : Service() {
                 val cfg = ProfileRepository.toAudioConfig(profile)
                 val enc = EncoderFactory.create(cfg)
                 encoder = enc
+
+                // If the user stopped while we were setting up, release what we built and bail
+                // (prevents a leaked pipeline/transport restarting after Stop).
+                if (shuttingDown) {
+                    runCatching { enc.close() }
+                    encoder = null
+                    return@launch
+                }
 
                 // TODO(Task 8): swap for/add UvoxClient as primary, keep IcyClient as fallback.
                 val icy = IcyClient(profile.host, profile.port, profile.password, profile.mount)
@@ -169,7 +180,9 @@ class StreamService : Service() {
         if (wakeLock == null) {
             val pm = getSystemService(POWER_SERVICE) as PowerManager
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "streamy::stream").apply {
-                acquire(WAKELOCK_TIMEOUT_MS)
+                // Indefinite acquire: a timeout cap would cut off long background broadcasts
+                // (the core feature). stopAndShutdown + onDestroy reliably release it.
+                acquire()
             }
         }
         if (wifiLock == null) {
@@ -280,7 +293,6 @@ class StreamService : Service() {
     companion object {
         private const val TAG = "StreamService"
         private const val CHANNEL_ID = "streamy_stream"
-        private const val WAKELOCK_TIMEOUT_MS = 30L * 60L * 1000L
 
         const val ACTION_START = "com.streamy.app.action.START"
         const val ACTION_STOP = "com.streamy.app.action.STOP"
