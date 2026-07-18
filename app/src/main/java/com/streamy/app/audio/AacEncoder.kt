@@ -18,16 +18,17 @@ class AacEncoder(
         setInteger(MediaFormat.KEY_CHANNEL_COUNT, if (mono) 1 else 2)
         setInteger(MediaFormat.KEY_BIT_RATE, bitrateBps)
         setInteger(MediaFormat.KEY_AAC_PROFILE, aacObjectType(bitrateBps / 1000))
-        setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 8192)
+        setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384)
     }
     private val info = MediaCodec.BufferInfo()
-    private var eos = false
+    @Volatile private var eos = false
+    private var closed = false
 
     init { codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE); codec.start() }
 
     override fun encode(pcm: ShortArray): List<ByteArray> {
         if (eos) return emptyList()
-        val inIdx = codec.dequeueInputBuffer(10_000)
+        val inIdx = codec.dequeueInputBuffer(0)
         if (inIdx >= 0) {
             val buf = codec.getInputBuffer(inIdx)!!
             buf.clear()
@@ -36,6 +37,7 @@ class AacEncoder(
             buf.put(bytes)
             codec.queueInputBuffer(inIdx, 0, bytes.size, 0, 0)
         }
+        // inIdx < 0: no input buffer available now — drop this PCM frame under backpressure (live speech; see Task 9).
         return drain()
     }
 
@@ -43,13 +45,16 @@ class AacEncoder(
         val inIdx = codec.dequeueInputBuffer(10_000)
         if (inIdx >= 0) codec.queueInputBuffer(inIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
         eos = true
-        return drain()
+        return drain(awaitEos = true)
     }
 
-    private fun drain(): List<ByteArray> {
+    private fun drain(awaitEos: Boolean = false): List<ByteArray> {
         val out = ArrayList<ByteArray>()
+        val deadlineMs = if (awaitEos) 200 else 0
+        val start = if (awaitEos) System.nanoTime() else 0L
         while (true) {
-            val o = codec.dequeueOutputBuffer(info, 0)
+            val timeoutUs = if (awaitEos) 10_000L else 0L
+            val o = codec.dequeueOutputBuffer(info, timeoutUs)
             when {
                 o >= 0 -> {
                     val raw = stripAdts(codec.getOutputBuffer(o)!!, info.size)
@@ -57,7 +62,11 @@ class AacEncoder(
                     codec.releaseOutputBuffer(o, false)
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return out
                 }
-                o == MediaCodec.INFO_TRY_AGAIN_LATER -> return out
+                o == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                    if (!awaitEos) return out
+                    // draining after EOS: keep waiting until the EOS buffer arrives or hard cap
+                    if ((System.nanoTime() - start) / 1_000_000 >= deadlineMs) return out
+                }
             }
         }
     }
@@ -74,7 +83,11 @@ class AacEncoder(
         return raw
     }
 
-    override fun close() { try { codec.stop() } finally { codec.release() } }
+    override fun close() {
+        if (closed) return
+        closed = true
+        try { codec.stop() } catch (_: IllegalStateException) {} finally { codec.release() }
+    }
 
     companion object {
         /** 16/24k → HE-AAC v1, else AAC-LC. Pure → unit tested. */
