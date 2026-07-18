@@ -12,7 +12,7 @@
         android:name=".StreamyApp"
         android:label="@string/app_name"
         android:theme="@style/Theme.Streamy"
-        android:usesCleartextTraffic="true">   <!-- dev: allow http to local servers -->
+        android:usesCleartextTraffic="true">   <!-- SHOUTcast source is plain TCP/http; users broadcast to their own http servers. -->
 
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
