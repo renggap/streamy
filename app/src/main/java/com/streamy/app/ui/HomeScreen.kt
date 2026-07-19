@@ -22,15 +22,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -76,6 +80,8 @@ fun HomeScreen(
     val bitrate by vm.bitrate.collectAsStateWithLifecycle()
     val sampleRate by vm.sampleRate.collectAsStateWithLifecycle()
     val mono by vm.mono.collectAsStateWithLifecycle()
+
+    var nowPlaying by remember { mutableStateOf("") }
 
     val snackbarHost = remember { SnackbarHostState() }
     LaunchedEffect(message) {
@@ -135,6 +141,13 @@ fun HomeScreen(
                     onBitrate = vm::setBitrate,
                     onSampleRate = vm::setSampleRate,
                     onMono = vm::setMono,
+                )
+
+                NowPlayingSection(
+                    text = nowPlaying,
+                    onTextChange = { nowPlaying = it },
+                    isLive = isLive,
+                    onUpdate = { vm.updateNowPlaying(nowPlaying) },
                 )
             } else {
                 NoProfileHint(onManageProfiles = onManageProfiles)
@@ -403,6 +416,65 @@ private fun NoProfileHint(onManageProfiles: () -> Unit) {
         ) {
             Text("MANAGE PROFILES", style = MaterialTheme.typography.labelLarge)
         }
+    }
+}
+
+// ---- Now-playing metadata pusher ----
+
+@Composable
+private fun NowPlayingSection(
+    text: String,
+    onTextChange: (String) -> Unit,
+    isLive: Boolean,
+    onUpdate: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            "NOW PLAYING",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = text,
+            onValueChange = onTextChange,
+            placeholder = {
+                Text(
+                    "Artist - Track",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(4.dp),
+            textStyle = MaterialTheme.typography.bodyMedium,
+            trailingIcon = {
+                Button(
+                    onClick = onUpdate,
+                    enabled = isLive,
+                    shape = RoundedCornerShape(4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                ) {
+                    Text("UPDATE", style = MaterialTheme.typography.labelLarge)
+                }
+            },
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.background,
+                unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                disabledContainerColor = MaterialTheme.colorScheme.background,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                cursorColor = MaterialTheme.colorScheme.primary,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

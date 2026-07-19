@@ -9,6 +9,7 @@ import com.streamy.app.data.Codec
 import com.streamy.app.data.db.AppDatabase
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.data.ProfileRepository
+import com.streamy.app.net.MetadataClient
 import com.streamy.app.service.ServiceController
 import com.streamy.app.service.StreamState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,7 +43,7 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     // Same db name as StreamService so profile writes are visible without a sync layer.
     private val db: AppDatabase = Room.databaseBuilder(
         app, AppDatabase::class.java, "streamy.db",
-    ).build()
+    ).addMigrations(AppDatabase.MIGRATION_1_2).build()
 
     private val repo = ProfileRepository(db.profileDao())
 
@@ -225,6 +226,13 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
             _userMessage.value = "No profile selected"
             return
         }
+        // AAC guard (interim): DNAS2's v1 source protocol is MP3-only — AAC bytes get
+        // mislabeled audio/mpeg and the source drops every few seconds. AAC needs Ultravox
+        // (not wired yet). Block the broken path; AacEncoder stays intact for future uvox.
+        if (selectedProfile.value?.codec == "AAC") {
+            _userMessage.value = "AAC isn't supported on SHOUTcast v2 (needs the Ultravox protocol) — use MP3"
+            return
+        }
         val needed = missingPermissions(ctx)
         if (needed.isNotEmpty()) {
             pendingStartProfileId = profileId
@@ -239,6 +247,22 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun stop() {
         ServiceController.stop(getApplication())
+    }
+
+    /**
+     * Push now-playing metadata to the selected profile's DNAS2 via admin.cgi?mode=updinfo.
+     * No-op with a user message if the profile has no admin creds or nothing is selected.
+     */
+    fun updateNowPlaying(title: String) {
+        val p = selectedProfile.value ?: run { _userMessage.value = "No profile selected"; return }
+        val user = p.adminUser; val pass = p.adminPassword
+        if (user.isNullOrBlank() || pass.isNullOrBlank()) {
+            _userMessage.value = "Set admin user + password on the profile to update metadata"; return
+        }
+        viewModelScope.launch {
+            val ok = MetadataClient().updateNowPlaying(p.host, p.port, p.sid, user, pass, title)
+            _userMessage.value = if (ok) "Now playing updated" else "Metadata update failed"
+        }
     }
 
     /** Called by MainActivity after the runtime permission flow completes. */

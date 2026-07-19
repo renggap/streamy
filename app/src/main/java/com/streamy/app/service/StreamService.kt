@@ -53,7 +53,9 @@ class StreamService : Service() {
     val state: StateFlow<StreamState> = _state.asStateFlow()
 
     private val db by lazy {
-        Room.databaseBuilder(this, AppDatabase::class.java, "streamy.db").build()
+        Room.databaseBuilder(this, AppDatabase::class.java, "streamy.db")
+            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .build()
     }
 
     private var transport: StreamTransport? = null

@@ -16,4 +16,6 @@ data class ProfileEntity(
     val bitrateKbps: Int,
     val sampleRateHz: Int,
     val mono: Boolean,
+    val adminUser: String? = null,     // DNAS2 admin.cgi creds for now-playing metadata
+    val adminPassword: String? = null, // (optional — only needed for metadata updates)
 )

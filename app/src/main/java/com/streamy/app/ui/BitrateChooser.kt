@@ -4,26 +4,33 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.Codec
 
@@ -34,18 +41,21 @@ import com.streamy.app.data.Codec
  * Stateless: caller passes value + callbacks. Two call sites — HomeScreen (bound to VM)
  * and EditProfileScreen (bound to local form state) — share the codec/bitrate/sample/mono
  * rules (HE-AAC at AAC ≤ 24 → mono forced) from this single source.
+ *
+ * Codec stays as two pills (MP3/AAC); bitrate / sample-rate / channels collapse to
+ * ExposedDropdownMenuBox dropdowns to save vertical space. Same public signature, so both
+ * call sites compile unchanged.
  */
 
 /**
- * Codec toggle, bitrate ladder, sample-rate picker, mono/stereo switch. Pure — pulls
- * nothing from the VM. Caller enforces [enabled] (Home disables when Live or when no
- * profile is selected).
+ * Codec toggle (pills) + bitrate / sample-rate / channels dropdowns. Pure — pulls nothing
+ * from the VM. Caller enforces [enabled] (Home disables when Live or when no profile).
  *
- * HE-AAC guard: AAC 16/24 → mono forced on; the mono/stereo toggle is disabled and a
- * hint explains the HE-AAC v1 reason. Callers are expected to mirror this when applying
- * [onCodec] / [onBitrate] (see [AudioConfigRules.needsHeAac]).
+ * HE-AAC guard: AAC 16/24 → mono forced on; the channels dropdown is disabled and a hint
+ * explains the HE-AAC v1 reason. Callers mirror this when applying [onCodec] / [onBitrate]
+ * (see [AudioConfigRules.needsHeAac]).
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BitrateChooser(
     codec: Codec,
@@ -66,7 +76,7 @@ fun BitrateChooser(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        // ---- Codec toggle ----
+        // ---- Codec toggle (pills, per spec) ----
         SectionLabel("CODEC")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TogglePill(
@@ -89,24 +99,14 @@ fun BitrateChooser(
             )
         }
 
-        // ---- Bitrate ladder ----
-        SectionLabel("BITRATE · KBPS")
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            bitrates.forEach { kbps ->
-                FilterChip(
-                    selected = kbps == bitrate,
-                    onClick = { if (enabled) onBitrate(kbps) },
-                    enabled = enabled,
-                    label = { Text("$kbps", style = MaterialTheme.typography.labelLarge) },
-                    shape = MaterialTheme.shapes.small,
-                    colors = chipColors(),
-                )
-            }
-        }
+        // ---- Bitrate ladder (dropdown) ----
+        DropdownField(
+            label = "BITRATE · KBPS",
+            selected = "$bitrate kbps",
+            enabled = enabled,
+            options = bitrates.map { it to "$it kbps" },
+            onSelect = { onBitrate(it) },
+        )
 
         if (heAac) {
             Row(
@@ -123,46 +123,87 @@ fun BitrateChooser(
             }
         }
 
-        // ---- Sample rate picker ----
-        SectionLabel("SAMPLE RATE")
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            AudioConfigRules.SAMPLE_RATES.forEach { hz ->
-                FilterChip(
-                    selected = hz == sampleRate,
-                    onClick = { if (enabled) onSampleRate(hz) },
-                    enabled = enabled,
-                    label = { Text(hz.toKHz(), style = MaterialTheme.typography.labelLarge) },
-                    shape = MaterialTheme.shapes.small,
-                    colors = chipColors(),
-                )
-            }
-        }
+        // ---- Sample rate (dropdown) ----
+        DropdownField(
+            label = "SAMPLE RATE",
+            selected = sampleRate.toKHz(),
+            enabled = enabled,
+            options = AudioConfigRules.SAMPLE_RATES.map { it to it.toKHz() },
+            onSelect = { onSampleRate(it) },
+        )
 
-        // ---- Channels ----
-        SectionLabel("CHANNELS")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TogglePill(
-                label = "MONO",
-                active = mono,
-                enabled = enabled && !heAac,
-                onClick = { onMono(true) },
-                activeContainer = MaterialTheme.colorScheme.secondaryContainer,
-                activeContent = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.weight(1f),
+        // ---- Channels (dropdown; disabled while HE-AAC forces mono) ----
+        DropdownField(
+            label = "CHANNELS",
+            selected = if (mono) "Mono" else "Stereo",
+            enabled = enabled && !heAac,
+            options = listOf(true to "Mono", false to "Stereo"),
+            onSelect = { onMono(it) },
+        )
+    }
+}
+
+/**
+ * Labeled read-only [ExposedDropdownMenuBox] styled to match [LabeledTextField] elsewhere
+ * in the app (hairline outline, background container, small rounded shape).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> DropdownField(
+    label: String,
+    selected: String,
+    enabled: Boolean,
+    options: List<Pair<T, String>>,
+    onSelect: (T) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        SectionLabel(label)
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { if (enabled) expanded = it },
+        ) {
+            OutlinedTextField(
+                value = selected,
+                onValueChange = {},
+                readOnly = true,
+                enabled = enabled,
+                singleLine = true,
+                shape = RoundedCornerShape(4.dp),
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                },
+                textStyle = MaterialTheme.typography.bodyMedium,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.background,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                    disabledContainerColor = MaterialTheme.colorScheme.background,
+                    focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                    unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
+                    disabledIndicatorColor = MaterialTheme.colorScheme.outline,
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    cursorColor = MaterialTheme.colorScheme.primary,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
             )
-            TogglePill(
-                label = "STEREO",
-                active = !mono,
-                enabled = enabled && !heAac,
-                onClick = { onMono(false) },
-                activeContainer = MaterialTheme.colorScheme.secondaryContainer,
-                activeContent = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.weight(1f),
-            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+            ) {
+                options.forEach { (value, text) ->
+                    DropdownMenuItem(
+                        text = { Text(text, style = MaterialTheme.typography.bodyMedium) },
+                        onClick = {
+                            onSelect(value)
+                            expanded = false
+                        },
+                    )
+                }
+            }
         }
     }
 }
@@ -213,12 +254,6 @@ private fun Dot(color: Color) {
             .background(color, CircleShape),
     )
 }
-
-@Composable
-private fun chipColors() = FilterChipDefaults.filterChipColors(
-    selectedContainerColor = MaterialTheme.colorScheme.primary,
-    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-)
 
 internal fun Int.toKHz(): String {
     val kHz = this / 1000.0
