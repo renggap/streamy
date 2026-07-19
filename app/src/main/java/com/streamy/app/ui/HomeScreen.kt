@@ -126,6 +126,15 @@ fun HomeScreen(
                 )
             }
 
+            if (hasProfile) {
+                NowPlayingSection(
+                    text = nowPlaying,
+                    onTextChange = { nowPlaying = it },
+                    isLive = isLive,
+                    onUpdate = { vm.updateNowPlaying(nowPlaying) },
+                )
+            }
+
             ProfileChip(
                 profile = selectedProfile,
                 profileCount = profiles.size,
@@ -144,13 +153,6 @@ fun HomeScreen(
                     onBitrate = vm::setBitrate,
                     onSampleRate = vm::setSampleRate,
                     onMono = vm::setMono,
-                )
-
-                NowPlayingSection(
-                    text = nowPlaying,
-                    onTextChange = { nowPlaying = it },
-                    isLive = isLive,
-                    onUpdate = { vm.updateNowPlaying(nowPlaying) },
                 )
             } else {
                 NoProfileHint(onManageProfiles = onManageProfiles)
