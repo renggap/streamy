@@ -21,6 +21,8 @@ import com.streamy.app.audio.AudioCapture
 import com.streamy.app.audio.AudioPipeline
 import com.streamy.app.audio.Encoder
 import com.streamy.app.audio.EncoderFactory
+import com.streamy.app.audio.LevelFeed
+import com.streamy.app.audio.LevelSnapshot
 import com.streamy.app.data.Codec
 import com.streamy.app.data.ProfileRepository
 import com.streamy.app.data.db.AppDatabase
@@ -54,6 +56,11 @@ class StreamService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _state = MutableStateFlow<StreamState>(StreamState.Idle)
     val state: StateFlow<StreamState> = _state.asStateFlow()
+
+    // One LevelFeed instance: passed into AudioPipeline (push side, audio thread) AND
+    // exposed here as levels (pull side, UI). Single instance — not two.
+    private val levelFeed = LevelFeed()
+    val levels: StateFlow<LevelSnapshot?> = levelFeed.flow
 
     private val db by lazy {
         Room.databaseBuilder(this, AppDatabase::class.java, "streamy.db")
@@ -159,6 +166,7 @@ class StreamService : Service() {
                             _state.value = StreamState.Error("mic_busy")
                             stopAndShutdown()
                         },
+                        levelFeed = levelFeed,
                     )
                     pipeline = p
                     acquireLocks()
@@ -230,6 +238,7 @@ class StreamService : Service() {
             { try { encoder?.close() } catch (e: Throwable) { Log.e(TAG, "encoder.close", e) } },
         )) step()
         pipeline = null; transport = null; client = null; encoder = null
+        levelFeed.reset()
         releaseLocks()
         _state.value = StreamState.Idle
         try {
