@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Streamy — Go live from your phone</title>
+  <meta name="description" content="Streamy is an Android app that broadcasts your live voice to a SHOUTcast v2 internet-radio server — and keeps streaming in the background, even with the screen off." />
+  <meta name="theme-color" content="#141210" />
+  <link rel="canonical" href="https://streamy-app.pages.dev/" />
+
+  <!-- Open Graph / social (no fabricated image — honest) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://streamy-app.pages.dev/" />
+  <meta property="og:title" content="Streamy — Go live from your phone" />
+  <meta property="og:description" content="Live speech from your Android phone, broadcast to a SHOUTcast v2 internet-radio server. Keeps streaming in the background." />
+  <meta name="twitter:card" content="summary" />
+
+  <!-- Favicon: red tally dot on dark -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23141210'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23FF3B30'/%3E%3C/svg%3E" />
+
+  <!-- Fonts: Space Grotesk (display) · Inter (body) · JetBrains Mono (readout) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="tokens.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ============================ NAV · N5 floating pill ============================ -->
+<header class="nav">
+  <nav class="nav-pill" aria-label="Primary">
+    <a class="brand" href="#top" aria-label="Streamy home">
+      <span class="dot" aria-hidden="true"></span>
+      <span>Streamy</span>
+    </a>
+    <div class="nav-links">
+      <a class="anchor" href="#features">Features</a>
+      <a class="anchor" href="#how">How it works</a>
+      <a class="anchor" href="#changelog">Changelog</a>
+      <a class="source" href="https://github.com/renggap/streamy" rel="noopener" target="_blank">Source ↗</a>
+    </div>
+  </nav>
+</header>
+
+<main id="top">
+
+  <!-- ============================ HERO ============================ -->
+  <section class="hero container reveal" aria-labelledby="hero-title">
+    <p class="eyebrow"><span class="pip" aria-hidden="true">●</span> Streamy · v1.0.0 · Android</p>
+
+    <span class="tally" role="img" aria-label="On air indicator">
+      <span class="led" aria-hidden="true"></span>
+      <span class="label">On Air</span>
+    </span>
+
+    <h1 id="hero-title">Go live from your phone.</h1>
+
+    <p class="lede">
+      Streamy is an Android app that sends your <strong>live voice</strong> to a SHOUTcast
+      internet-radio server — and keeps broadcasting, even with the screen off.
+    </p>
+
+    <!-- Hand-built oscilloscope: frozen broadcast trace with phosphor glow.
+         No fake UI chrome, no stock image — pure SVG. -->
+    <figure class="scope" aria-label="Oscilloscope waveform of a live voice">
+      <svg viewBox="0 0 1000 110" role="img" aria-label="Audio waveform">
+        <g class="grid" aria-hidden="true">
+          <line x1="0" y1="20" x2="1000" y2="20" />
+          <line x1="0" y1="90" x2="1000" y2="90" />
+          <line x1="250" y1="6" x2="250" y2="104" />
+          <line x1="500" y1="6" x2="500" y2="104" />
+          <line x1="750" y1="6" x2="750" y2="104" />
+        </g>
+        <line class="axis" x1="0" y1="55" x2="1000" y2="55" aria-hidden="true" />
+        <polyline class="trace" aria-hidden="true"
+          points="0,55 30,53 60,57 90,49 120,61 150,45 180,65 210,40 240,70 270,33 300,77 330,33 360,77 390,43 420,67 450,47 480,63 510,38 540,72 570,28 600,82 630,30 660,80 690,36 720,74 750,44 780,66 810,50 840,60 870,52 900,58 930,54 960,56 1000,55" />
+      </svg>
+    </figure>
+
+    <a class="cue" href="#how"><span class="arr" aria-hidden="true">↓</span> How it works</a>
+  </section>
+
+  <!-- ============================ WHAT IT IS ============================ -->
+  <section class="section container reveal" aria-labelledby="what-title">
+    <div class="section-head">
+      <p class="mono">What it is</p>
+      <h2 id="what-title">A pocket-sized broadcast studio.</h2>
+    </div>
+    <div class="statement-wrap">
+      <p class="statement">Your phone becomes a <em>live broadcast source</em>.</p>
+      <p class="body">
+        Speak into the mic, and Streamy encodes your voice and sends it over the internet to a
+        SHOUTcast v2 server — the same kind of server that powers thousands of internet-radio
+        stations. Anyone tuned in to that server hears you in real time. No laptop, no mixing
+        desk, no studio required.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================ FEATURES ============================ -->
+  <section class="section container reveal" id="features" aria-labelledby="features-title">
+    <div class="section-head">
+      <p class="mono">Features</p>
+      <h2 id="features-title">Built to stay on air.</h2>
+      <p class="desc">Everything below ships in v1.0.0 — written for humans, not protocols.</p>
+    </div>
+
+    <div class="features">
+      <article class="feature">
+        <p class="ch"><i></i> Ch 01</p>
+        <h3>Broadcasts to real radio servers</h3>
+        <p>Uses the genuine SHOUTcast v2 source protocol — the standard behind thousands of internet-radio stations. Live-tested against DNAS&nbsp;2.6.1.</p>
+      </article>
+
+      <article class="feature">
+        <p class="ch"><i></i> Ch 02</p>
+        <h3>Your choice of audio quality</h3>
+        <p>From voice-friendly 16&nbsp;kbps up to music-grade 192&nbsp;kbps. Pick the bitrate, sample rate, and mono or stereo.</p>
+      </article>
+
+      <article class="feature">
+        <p class="ch"><i></i> Ch 03</p>
+        <h3>Stays live in the background</h3>
+        <p>A foreground service keeps the mic and connection alive with the screen off — and reconnects after the system reclaims the app.</p>
+      </article>
+
+      <article class="feature">
+        <p class="ch"><i></i> Ch 04</p>
+        <h3>Drops? It reconnects itself</h3>
+        <p>Automatic retry with growing pauses between attempts — plus a one-tap stop when you'd rather give up.</p>
+      </article>
+
+      <article class="feature">
+        <p class="ch"><i></i> Ch 05</p>
+        <h3>Now-playing titles, no admin login</h3>
+        <p>Type a song or show name while live and listeners see it instantly. No server admin password needed.</p>
+      </article>
+
+      <article class="feature">
+        <p class="ch"><i></i> Ch 06</p>
+        <h3>See your voice as a waveform</h3>
+        <p>A real-time oscilloscope drawn straight from your mic signal, glowing like a broadcast tally light.</p>
+      </article>
+
+      <article class="feature">
+        <p class="ch"><i></i> Ch 07</p>
+        <h3>Save multiple stations</h3>
+        <p>Keep a profile per server — host, port, password, and audio settings — and switch between them.</p>
+      </article>
+
+      <article class="feature">
+        <p class="ch"><i></i> Ch 08</p>
+        <h3>A console that feels like a console</h3>
+        <p>Late-night tally-light design: deep ink, on-air red, and a monospace readout. Built with Hallmark.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============================ HOW IT WORKS ============================ -->
+  <section class="section container reveal" id="how" aria-labelledby="how-title">
+    <div class="section-head">
+      <p class="mono">How it works</p>
+      <h2 id="how-title">From your voice to their ears.</h2>
+      <p class="desc">Four steps, happening continuously while you're live.</p>
+    </div>
+
+    <ol class="pipeline">
+      <li class="step">
+        <span class="num">01</span>
+        <h3>You speak</h3>
+        <p>Your phone's microphone picks up your voice.</p>
+      </li>
+      <li class="step">
+        <span class="num">02</span>
+        <h3>Streamy encodes</h3>
+        <p>It compresses your voice into MP3 audio in real time.</p>
+      </li>
+      <li class="step">
+        <span class="num">03</span>
+        <h3>Sent to your server</h3>
+        <p>The audio travels over the internet to your SHOUTcast v2 server.</p>
+      </li>
+      <li class="step">
+        <span class="num">04</span>
+        <h3>Listeners tune in</h3>
+        <p>Anyone connected to that server hears you, live.</p>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============================ CHANGELOG ============================ -->
+  <section class="section container reveal" id="changelog" aria-labelledby="log-title">
+    <div class="section-head">
+      <p class="mono">Changelog</p>
+      <h2 id="log-title">Transmission log.</h2>
+      <p class="desc">What shipped, and what's been patched since.</p>
+    </div>
+
+    <div class="log">
+      <div class="log-bar">
+        <span class="title"><i></i> Release notes</span>
+        <span class="meta">streamy-app.pages.dev</span>
+      </div>
+      <div class="log-body">
+
+        <div class="log-release">
+          <span class="ver"><b>v1.0.0</b> <span>Initial release · 2026-07</span></span>
+          <ul>
+            <li><b>Live speech → SHOUTcast v2</b> over the real Ultravox&nbsp;2.1 source protocol.</li>
+            <li><b>MP3</b> at 16, 24, 48, 64, 96, 128, and 192&nbsp;kbps.</li>
+            <li><b>Background streaming</b> that survives screen-off and backgrounding.</li>
+            <li><b>Auto-reconnect</b> with a manual stop-reconnect control.</li>
+            <li><b>Now-playing titles</b> without a server admin login.</li>
+            <li><b>Real oscilloscope VU meter</b> on the broadcast screen.</li>
+            <li><b>Multiple station profiles</b> with per-profile audio settings.</li>
+            <li><b>Bitrate, sample-rate, and channel</b> dropdowns.</li>
+          </ul>
+          <p class="note">Note: AAC encoding is implemented but hidden in this release — being revisited.</p>
+        </div>
+
+        <div class="log-release">
+          <span class="ver"><b>Patches</b> <span>After v1.0.0</span></span>
+          <ul>
+            <li>Low-bitrate audio (16 / 24&nbsp;kbps) now reports its quality correctly.</li>
+            <li>Connects to Centova / sctrans2-based servers (uses each server's own cipher key).</li>
+            <li>AAC stability improved via ADTS framing (still hidden in the UI for now).</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============================ FOOTER · Ft5 statement ============================ -->
+<footer class="footer">
+  <div class="container">
+    <p class="closing reveal">On air whenever <em>you</em> are.</p>
+    <div class="footer-meta">
+      <a href="https://github.com/renggap/streamy" rel="noopener" target="_blank">github.com/renggap/streamy ↗</a>
+      <span class="signoff"><i></i> v1.0.0 · Built with Hallmark · End of transmission</span>
+    </div>
+  </div>
+</footer>
+
+<!-- Fade-in on scroll (atmospheric: fade only). Reduced-motion users see content instantly via CSS. -->
+<script>
+  (function () {
+    var els = document.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window)) {
+      els.forEach(function (e) { e.classList.add('is-in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) { en.target.classList.add('is-in'); io.unobserve(en.target); }
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+    els.forEach(function (e) { io.observe(e); });
+  })();
+</script>
+
+</body>
+</html>

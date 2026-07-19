@@ -1,0 +1,92 @@
+/* Hallmark · macrostructure: Marquee Hero · H1 hero knobs: tally-led + oscilloscope, alignment=center
+ * theme: custom · vibe: "late-night tally-light broadcast console" · paper: oklch(14% 0.008 50) · accent: oklch(65% 0.22 55)
+ * display: Space Grotesk · body: Inter · mono: JetBrains Mono · axes: dark / geometric-sans / warm (on-air red ~55°)
+ * studied: no · context: inferred (brand-aligned to the Android app) · genre: atmospheric · v1.0.0
+ *
+ * Brand anchor: app's on-air red #FF3B30 -> oklch(65.5% 0.252 55). Chroma eased to 0.22 here so a vivid red
+ * doesn't read neon on the dark canvas (gate 40). Single accent — atmospheric is one-accent; a tally light is red.
+ */
+
+:root {
+  /* ---- Color · warm-dark atmospheric, tinted toward the on-air-red anchor ---- */
+  --color-paper:    oklch(14% 0.008 50);   /* canvas: warm near-black */
+  --color-paper-2:  oklch(17.5% 0.009 50); /* elevated panel */
+  --color-paper-3:  oklch(22% 0.010 50);   /* raised / hover surface */
+
+  --color-ink:      oklch(96% 0.004 70);   /* primary text — warm white */
+  --color-ink-2:    oklch(79% 0.008 60);   /* secondary text / card copy (AA on panels) */
+  --color-readout:  oklch(71% 0.012 55);   /* small mono labels (AA on panels) */
+  --color-muted:    oklch(67% 0.011 55);   /* de-emphasised copy on paper */
+  --color-faint:    oklch(54% 0.012 55);   /* decorative / tertiary only */
+
+  --color-rule:     oklch(28% 0.010 50);   /* hairline divider */
+  --color-rule-2:   oklch(24% 0.009 50);   /* secondary divider */
+
+  --color-accent:     oklch(65% 0.22 55);  /* on-air red (#FF3B30) */
+  --color-accent-2:   oklch(69% 0.21 55);  /* hover / brighter */
+  --color-accent-soft:oklch(65% 0.22 55 / 0.16); /* bloom / glow fill */
+  --color-accent-ink: oklch(98% 0.004 70); /* text on a red fill (broadcast white-on-red) */
+  --color-focus:      oklch(66% 0.24 55);  /* :focus-visible ring, higher chroma */
+
+  /* ---- Typography ---- */
+  --font-display: "Space Grotesk", "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-body:    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, "SFMono-Regular", "Menlo", monospace;
+
+  --text-xs:      0.75rem;     /* 12 — mono eyebrows */
+  --text-sm:      0.875rem;    /* 14 — captions */
+  --text-base:    1.0625rem;   /* 17 — body (>=14 floor, generous for dark) */
+  --text-lg:      1.1875rem;   /* 19 */
+  --text-xl:      1.4375rem;   /* 23 */
+  --text-2xl:     1.875rem;    /* 30 — section heads */
+  --text-3xl:     2.375rem;    /* 38 */
+  --text-display-s: clamp(2rem, 3.2vw + 0.8rem, 3.25rem);
+  --text-display:   clamp(2.75rem, 6vw + 0.75rem, 5.5rem);
+
+  --leading-tight: 1.05;
+  --leading-snug: 1.2;
+  --leading-copy: 1.6;
+
+  --tracking-tight: -0.03em;
+  --tracking-tighter: -0.035em;
+  --tracking-mono: 0.12em;
+
+  --measure: 62ch;
+
+  /* ---- Spacing · 4pt scale ---- */
+  --space-3xs: 2px;
+  --space-2xs: 4px;
+  --space-xs:  8px;
+  --space-sm:  12px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 96px;
+  --space-5xl: 128px;
+  --space-6xl: 160px;
+
+  /* ---- Radii ---- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+  --radius-pill: 999px;
+
+  /* ---- Rule / border ---- */
+  --rule-hairline: 1px;
+  --rule-card: 1px;
+
+  /* ---- Motion · atmospheric = fade only, no slide/bounce ---- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 420ms;
+
+  /* ---- Layout ---- */
+  --gutter: clamp(20px, 5vw, 64px);
+  --maxw: 1120px;
+}

@@ -9,3 +9,6 @@
 .cxx
 /app/build
 /.kotlin
+
+# wrangler local state
+/.wrangler/
