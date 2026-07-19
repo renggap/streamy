@@ -22,7 +22,7 @@ import java.net.URL
 
 /**
  * Full-pipeline instrumented integration test: real mic -> Mp3Encoder (native lib) ->
- * StreamService (foreground) -> IcyClient (SHOUTcast v1) -> the real DNAS2 server.
+ * StreamService (foreground) -> UvoxClient (Ultravox 2.1, audio/mpeg) -> the real DNAS2 server.
  *
  * Requires BuildConfig.TEST_HOST/PORT/PASSWORD (injected from local.properties). If absent,
  * the test is skipped (assumption failure -> skipped, not failed). Run on a connected device:

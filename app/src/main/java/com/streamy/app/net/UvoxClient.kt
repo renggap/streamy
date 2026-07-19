@@ -42,7 +42,7 @@ class UvoxClient(
     private var out: OutputStream? = null
 
     override fun connect(bitrateKbps: Int, name: String, genre: String) {
-        // Close any prior socket so a reconnect never leaks (mirrors IcyClient).
+        // Close any prior socket so a reconnect never leaks.
         try { socket?.close() } catch (_: Throwable) {}
         socket = null; out = null
         val s = Socket(host, port).apply {
@@ -101,6 +101,25 @@ class UvoxClient(
         runCatching { socket?.close() }
         socket = null; out = null
     }
+
+    /**
+     * Admin-free in-stream metadata via Ultravox class 3 / type 0x902. Live-verified against
+     * DNAS2 2.6.1: one message with payload `[MetadataID u16 BE][Span u16 BE][Index u16 BE][XML]`
+     * updates SONGTITLE with NO admin creds. `<TIT2>title</TIT2>` alone sets SONGTITLE = title.
+     * Best-effort: no-op if not connected. The frame trailer added by [message] is correct —
+     * do NOT add a NUL inside the payload.
+     */
+    fun updateNowPlaying(title: String) {
+        val xml = ("<?xml version=\"1.0\" encoding=\"UTF-8\" ?><metadata><TIT2>"
+            + title.xmlEsc() + "</TIT2></metadata>").toByteArray(Charsets.UTF_8)
+        val payload = ByteArray(6 + xml.size)
+        payload[1] = 1; payload[3] = 1; payload[5] = 1 // MetadataID=1, Span=1, Index=1 (BE u16, high byte 0)
+        System.arraycopy(xml, 0, payload, 6, xml.size)
+        runCatching { out?.write(message(3, 0x902, payload)); out?.flush() }
+    }
+
+    private fun String.xmlEsc() =
+        replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     // ---- Ultravox framing ----
 

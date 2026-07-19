@@ -75,12 +75,7 @@ fun EditProfileScreen(
     var sampleRate by remember(profileId) { mutableStateOf(44_100) }
     var mono by remember(profileId) { mutableStateOf(true) }
 
-    // Optional admin.cgi creds for now-playing metadata (DNAS2 admin user/pass).
-    var adminUser by remember(profileId) { mutableStateOf("") }
-    var adminPassword by remember(profileId) { mutableStateOf("") }
-
     var showPassword by remember(profileId) { mutableStateOf(false) }
-    var showAdminPassword by remember(profileId) { mutableStateOf(false) }
     var pendingDelete by remember(profileId) { mutableStateOf(false) }
     // New profile (isNew) needs no async DB load -> ready immediately. Existing rows start
     // not-loaded and flip after the LaunchedEffect read. (Previously `!isNew` — inverted,
@@ -102,8 +97,6 @@ fun EditProfileScreen(
                 bitrate = p.bitrateKbps
                 sampleRate = p.sampleRateHz
                 mono = p.mono
-                adminUser = p.adminUser ?: ""
-                adminPassword = p.adminPassword ?: ""
             }
             loaded = true
         }
@@ -230,32 +223,6 @@ fun EditProfileScreen(
             )
         }
 
-        FieldGroup("METADATA (OPTIONAL)") {
-            LabeledTextField(
-                label = "Admin user",
-                value = adminUser,
-                onValueChange = { adminUser = it },
-                placeholder = "DNAS2 admin user",
-            )
-            LabeledTextField(
-                label = "Admin password",
-                value = adminPassword,
-                onValueChange = { adminPassword = it },
-                placeholder = "DNAS2 admin password",
-                keyboardType = KeyboardType.Password,
-                visualTransformation = if (showAdminPassword) VisualTransformation.None
-                else PasswordVisualTransformation(),
-                trailing = {
-                    TextButton(onClick = { showAdminPassword = !showAdminPassword }) {
-                        Text(
-                            if (showAdminPassword) "HIDE" else "SHOW",
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                    }
-                },
-            )
-        }
-
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!isNew) {
                 OutlinedButton(
@@ -285,8 +252,8 @@ fun EditProfileScreen(
                         bitrateKbps = bitrate,
                         sampleRateHz = sampleRate,
                         mono = mono,
-                        adminUser = adminUser.trim().ifBlank { null },
-                        adminPassword = adminPassword.ifBlank { null },
+                        // adminUser/adminPassword left default (null): in-stream metadata
+                        // now flows through Ultravox 0x902 — no admin creds needed.
                     )
                     vm.saveProfile(entity) { onBack() }
                 },

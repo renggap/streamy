@@ -27,7 +27,6 @@ import com.streamy.app.data.Codec
 import com.streamy.app.data.ProfileRepository
 import com.streamy.app.data.db.AppDatabase
 import com.streamy.app.R
-import com.streamy.app.net.IcyClient
 import com.streamy.app.net.SourceClient
 import com.streamy.app.net.StreamTransport
 import com.streamy.app.net.TransportState
@@ -43,9 +42,9 @@ import kotlinx.coroutines.launch
 
 /**
  * Foreground microphone service that owns the live broadcast pipeline:
- * Room lookup -> [EncoderFactory] -> [IcyClient] over [StreamTransport] -> [AudioPipeline].
+ * Room lookup -> [EncoderFactory] -> [UvoxClient] over [StreamTransport] -> [AudioPipeline].
  *
- * Lifecycle: [onStartCommand] routes [ACTION_START]/[ACTION_STOP]; [stopAndShutdown]
+ * Lifecycle: [onStartCommand] routes [ACTION_START]/[ACTION_STOP]/[ACTION_META]; [stopAndShutdown]
  * is the single idempotent teardown path used by every error/stop branch.
  *
  * ponytail: skip DI / media-session / separate :stream process — single service, one scope,
@@ -107,6 +106,14 @@ class StreamService : Service() {
                 }
             }
             ACTION_STOP -> stopAndShutdown()
+            ACTION_META -> {
+                val title = intent.getStringExtra(EXTRA_TITLE)
+                if (title != null) {
+                    scope.launch {
+                        (client as? UvoxClient)?.updateNowPlaying(title)
+                    }
+                }
+            }
         }
         return START_STICKY
     }
@@ -130,14 +137,14 @@ class StreamService : Service() {
                 // (no socket yet — connect() runs later from the transport coroutine).
                 val enc = EncoderFactory.create(cfg)
 
-                // Pick the source transport by codec. AAC needs the Ultravox 2.1 protocol
-                // (DNAS2's v1 source is MP3-only and mislabels AAC); MP3 rides the v1 protocol.
-                // Both implement SourceClient. See docs/plans/2026-07-18-uvox-finding.md.
-                val source: SourceClient = if (cfg.codec == Codec.AAC) {
-                    UvoxClient(profile.host, profile.port, profile.sid, profile.password, mime = "audio/aacp")
-                } else {
-                    IcyClient(profile.host, profile.port, profile.password, profile.mount)
-                }
+                // Ultravox 2.1 source client for BOTH codecs: AAC rides audio/aacp (0x8003),
+                // MP3 rides audio/mpeg (0x7000) — live-verified stable on DNAS2 2.6.1.
+                // Unifying on UvoxClient also gives MP3 in-stream metadata (0x902) for free.
+                val source: SourceClient = UvoxClient(
+                    host = profile.host, port = profile.port, sid = profile.sid,
+                    password = profile.password,
+                    mime = if (cfg.codec == Codec.AAC) "audio/aacp" else "audio/mpeg",
+                )
 
                 // Assign + start under the monitor so a concurrent Stop can't orphan the
                 // transport / audio thread / native encoder. Re-check shuttingDown in case a
@@ -322,7 +329,9 @@ class StreamService : Service() {
 
         const val ACTION_START = "com.streamy.app.action.START"
         const val ACTION_STOP = "com.streamy.app.action.STOP"
+        const val ACTION_META = "com.streamy.app.action.META"
         const val EXTRA_PROFILE_ID = "com.streamy.app.extra.PROFILE_ID"
+        const val EXTRA_TITLE = "com.streamy.app.extra.TITLE"
         const val NOTIF_ID = 0x5bee7
     }
 }

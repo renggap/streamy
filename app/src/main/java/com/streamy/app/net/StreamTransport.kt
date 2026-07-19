@@ -1,6 +1,7 @@
 package com.streamy.app.net
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -19,6 +20,7 @@ class StreamTransport(
     private val queue = Channel<ByteArray>(CAPACITY)
     private var drops = 0L
     @Volatile private var stopped = false
+    private var job: Job? = null
 
     /** Non-blocking enqueue. If the queue is full, DROP THE NEW frame (drop-newest) — keeps
      *  broadcast latency low under downstream backpressure. Counts the drop for metrics. */
@@ -28,7 +30,7 @@ class StreamTransport(
     }
 
     fun start() {
-        scope.launch {
+        job = scope.launch {
             var attempt = 0
             while (!stopped) {
                 try {
@@ -59,7 +61,16 @@ class StreamTransport(
         }
     }
 
-    fun stop() { stopped = true; queue.close() }
+    /**
+     * Stop the transport. Cancelling [job] throws CancellationException out of any in-flight
+     * [delay] (the backoff sleep), so the reconnect loop ends at once instead of waiting up
+     * to 20s. The [stopped] flag + [queue.close] cover the producer side.
+     */
+    fun stop() {
+        stopped = true
+        queue.close()
+        job?.cancel()
+    }
 
     companion object {
         const val CAPACITY = 64

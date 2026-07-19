@@ -282,16 +282,20 @@ private fun HeroControl(
     val isLive = state is StreamState.Live
     val isBusy = state is StreamState.Connecting || state is StreamState.Reconnecting
 
-    // Tally-lamp palette: red when armed (idle, ready to go), green when Live.
-    val lampOn = isLive
+    // Stop is reachable from any non-Idle state so the user can abort during Connecting /
+    // Reconnecting / Error (the Stop-reconnect fix #2). Start is only reachable from Idle.
+    // Tap mapping:
+    //   - Idle      -> onStart (Start)
+    //   - Live      -> onStop  (Stop)
+    //   - Busy/Err  -> onStop  (Stop / abort)
+    val lampAction: () -> Unit = if (state is StreamState.Idle) onStart else onStop
     val lampColor = if (isLive) MaterialTheme.colorScheme.secondary
     else MaterialTheme.colorScheme.primary
     val lampLabel = when {
         isLive -> "STOP"
-        isBusy -> "WORKING"
-        else -> "START"
+        state is StreamState.Idle -> "START"
+        else -> "STOP"
     }
-    val lampAction = if (isLive) onStop else onStart
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -299,7 +303,7 @@ private fun HeroControl(
     ) {
         Button(
             onClick = lampAction,
-            enabled = enabled && !isBusy,
+            enabled = enabled || state !is StreamState.Idle,
             shape = RoundedCornerShape(4.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = lampColor,
@@ -320,8 +324,8 @@ private fun HeroControl(
             )
         }
         Text(
-            text = if (lampOn) "Tap to stop broadcasting"
-            else "Tap to go on air",
+            text = if (state is StreamState.Idle) "Tap to go on air"
+            else "Tap to stop broadcasting",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 4.dp),

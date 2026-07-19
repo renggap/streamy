@@ -27,6 +27,19 @@ object ServiceController {
         ContextCompat.startForegroundService(context, intent)
     }
 
+    /**
+     * Push now-playing metadata to the running stream via Ultravox 0x902 (no admin creds).
+     * Service must already be foreground (Live); just delivers the action — `startService`
+     * is a no-op restart if the service is already running.
+     */
+    fun updateNowPlaying(context: Context, title: String) {
+        val intent = Intent(context, StreamService::class.java).apply {
+            action = StreamService.ACTION_META
+            putExtra(StreamService.EXTRA_TITLE, title)
+        }
+        context.startService(intent)
+    }
+
     /** Convenience for binders; UI owns the [ServiceConnection] lifecycle. */
     fun bind(context: Context, conn: ServiceConnection) {
         context.bindService(

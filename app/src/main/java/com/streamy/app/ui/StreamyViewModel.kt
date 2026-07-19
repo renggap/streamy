@@ -10,7 +10,6 @@ import com.streamy.app.data.Codec
 import com.streamy.app.data.db.AppDatabase
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.data.ProfileRepository
-import com.streamy.app.net.MetadataClient
 import com.streamy.app.service.ServiceController
 import com.streamy.app.service.StreamState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -250,19 +249,15 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Push now-playing metadata to the selected profile's DNAS2 via admin.cgi?mode=updinfo.
-     * No-op with a user message if the profile has no admin creds or nothing is selected.
+     * Push now-playing metadata via Ultravox 0x902 (admin-free) on the running stream.
+     * Routes through [ServiceController] -> [StreamService.ACTION_META] -> [UvoxClient.updateNowPlaying].
      */
     fun updateNowPlaying(title: String) {
-        val p = selectedProfile.value ?: run { _userMessage.value = "No profile selected"; return }
-        val user = p.adminUser; val pass = p.adminPassword
-        if (user.isNullOrBlank() || pass.isNullOrBlank()) {
-            _userMessage.value = "Set admin user + password on the profile to update metadata"; return
-        }
-        viewModelScope.launch {
-            val ok = MetadataClient().updateNowPlaying(p.host, p.port, p.sid, user, pass, title)
-            _userMessage.value = if (ok) "Now playing updated" else "Metadata update failed"
-        }
+        val p = selectedProfile.value
+        if (p == null) { _userMessage.value = "No profile selected"; return }
+        if (streamState.value !is StreamState.Live) { _userMessage.value = "Start streaming first"; return }
+        ServiceController.updateNowPlaying(getApplication(), title)
+        _userMessage.value = "Title updated"
     }
 
     /** Called by MainActivity after the runtime permission flow completes. */

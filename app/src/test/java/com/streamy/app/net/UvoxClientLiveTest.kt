@@ -56,6 +56,54 @@ class UvoxClientLiveTest {
         }
     }
 
+    @Test fun publish_mp3_and_push_metadata_via_uvox_0x902() {
+        val host = System.getenv("STREAMY_LIVE_HOST")
+        val port = System.getenv("STREAMY_LIVE_PORT")?.toIntOrNull()
+        val password = System.getenv("STREAMY_LIVE_PASSWORD")
+        val sid = System.getenv("STREAMY_LIVE_SID")?.toIntOrNull() ?: 1
+        val mp3Path = System.getenv("STREAMY_LIVE_MP3") ?: "/tmp/uvox.mp3"
+        assumeTrue("STREAMY_LIVE_HOST/PORT/PASSWORD not set — skipping", host != null && port != null && password != null)
+
+        val client = UvoxClient(host!!, port!!, sid, password!!, mime = "audio/mpeg")
+        client.connect(bitrateKbps = 128, name = "Streamy Uvox MP3 Meta", genre = "Speech")
+        val mp3 = File(mp3Path)
+        assumeTrue("$mp3Path missing — skipping", mp3.exists())
+
+        val running = intArrayOf(1)
+        val sender = thread(name = "uvox-live-mp3-publish") {
+            mp3.inputStream().use { input ->
+                val buf = ByteArray(4 * 1024)
+                while (running[0] == 1) {
+                    val mark = input.available()
+                    val n = input.read(buf)
+                    if (n <= 0) break
+                    client.send(buf.copyOf(n))
+                    Thread.sleep(if (mark < buf.size) 200 else 30)
+                }
+            }
+        }
+
+        try {
+            Thread.sleep(3_000) // let the source register
+            client.updateNowPlaying("Streamy Unit Title")
+            // Server applies the SONGTITLE update synchronously on the next flush; poll briefly.
+            var title: String? = null
+            for (i in 1..10) {
+                title = statsField(host, port, "SONGTITLE")
+                if (title != null && title.contains("Streamy Unit Title")) break
+                Thread.sleep(500)
+            }
+            println("UvoxClientLiveTest: SONGTITLE=$title")
+            check(title != null && title.contains("Streamy Unit Title")) {
+                "expected SONGTITLE to contain 'Streamy Unit Title', got '$title'"
+            }
+        } finally {
+            running[0] = 0
+            sender.interrupt()
+            client.close()
+        }
+    }
+
     private fun statsField(host: String, port: Int, tag: String): String? = try {
         val xml = (URL("http://$host:$port/stats?sid=1").openConnection() as HttpURLConnection)
             .apply { connectTimeout = 5_000; readTimeout = 5_000 }
