@@ -80,6 +80,7 @@ fun HomeScreen(
     val bitrate by vm.bitrate.collectAsStateWithLifecycle()
     val sampleRate by vm.sampleRate.collectAsStateWithLifecycle()
     val mono by vm.mono.collectAsStateWithLifecycle()
+    val levels by vm.levels.collectAsStateWithLifecycle()
 
     var nowPlaying by remember { mutableStateOf("") }
 
@@ -115,6 +116,8 @@ fun HomeScreen(
                 onStart = vm::start,
                 onStop = vm::stop,
             )
+
+            VuMeter(snapshot = levels)
 
             if (needsRestart) {
                 Hint(
