@@ -56,11 +56,15 @@ class UvoxClient(
             socket = s
             val o = s.getOutputStream(); out = o
 
-            // 1) Request Cipher -> key (DNAS2 returns "foobar").
+            // 1) Request Cipher -> key. Most servers return "foobar"; Centova and others leave
+            //    uvoxcipherkey BLANK and the response is empty. Use the server's actual key
+            //    (empty is valid — XTEA pads it to a 16-zero key, which the server also uses).
+            //    Do NOT default to "foobar": that encrypts with the wrong key and the server
+            //    decrypts garbage -> "Bad password" denial.
             val cipherResp = request(1, 0x009, "2.1")
             if (!cipherResp.startsWith("ACK")) throw ProtocolException("cipher NAK: $cipherResp")
             val cipherKey = cipherResp.substringAfter("ACK:").trimEnd(NULL_CHAR)
-                .ifEmpty { "foobar" }.toByteArray(Charsets.US_ASCII)
+                .toByteArray(Charsets.US_ASCII)
 
             // 2) Authenticate: UID empty, AuthBlob = password, both XTEA-enciphered.
             val encUid = UvoxXtea.encipher(ByteArray(0), cipherKey)
