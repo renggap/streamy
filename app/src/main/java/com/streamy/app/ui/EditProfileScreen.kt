@@ -77,7 +77,10 @@ fun EditProfileScreen(
 
     var showPassword by remember(profileId) { mutableStateOf(false) }
     var pendingDelete by remember(profileId) { mutableStateOf(false) }
-    var loaded by remember(profileId) { mutableStateOf(!isNew) }
+    // New profile (isNew) needs no async DB load -> ready immediately. Existing rows start
+    // not-loaded and flip after the LaunchedEffect read. (Previously `!isNew` — inverted,
+    // which rendered a blank surface for new profiles.)
+    var loaded by remember(profileId) { mutableStateOf(isNew) }
 
     // Load existing profile into the form once.
     LaunchedEffect(profileId) {

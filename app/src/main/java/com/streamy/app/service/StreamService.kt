@@ -23,6 +23,7 @@ import com.streamy.app.audio.Encoder
 import com.streamy.app.audio.EncoderFactory
 import com.streamy.app.data.ProfileRepository
 import com.streamy.app.data.db.AppDatabase
+import com.streamy.app.R
 import com.streamy.app.net.IcyClient
 import com.streamy.app.net.StreamTransport
 import com.streamy.app.net.TransportState
@@ -271,7 +272,7 @@ class StreamService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Streamy")
             .setContentText(text)
             .setOngoing(true)

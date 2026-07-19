@@ -7,9 +7,12 @@ import android.os.Bundle
 import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
@@ -73,6 +76,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Edge-to-edge so the themed Surface fills behind the status/nav bars; content is then
+        // lifted into the safe area via safeDrawingPadding below (fixes cramped top controls).
+        enableEdgeToEdge()
 
         // Bind early so the VM mirrors service state as soon as the binder is up. Service
         // binds to itself; if not already started this creates an idle instance (no broadcast).
@@ -89,7 +95,9 @@ class MainActivity : ComponentActivity() {
                         if (perms.isNotEmpty()) permissionLauncher.launch(perms.toTypedArray())
                     }
 
-                    StreamyNavigation(vm = vm)
+                    Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+                        StreamyNavigation(vm = vm)
+                    }
                 }
             }
         }
