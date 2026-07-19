@@ -65,8 +65,9 @@ class MainActivity : ComponentActivity() {
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val s = (binder as? StreamService.LocalBinder)?.service ?: return
-            // lifecycleScope auto-cancels on destroy, so the collector dies with the Activity.
+            // lifecycleScope auto-cancels on destroy, so the collectors die with the Activity.
             lifecycleScope.launch { s.state.collect { vm.onServiceStateChanged(it) } }
+            lifecycleScope.launch { s.levels.collect { vm.onLevels(it) } }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {

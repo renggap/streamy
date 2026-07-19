@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
+import com.streamy.app.audio.LevelSnapshot
 import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.Codec
 import com.streamy.app.data.db.AppDatabase
@@ -63,6 +64,10 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     // Mirror of StreamService.state, pushed from MainActivity. Idle until a binder attaches.
     private val _streamState = MutableStateFlow<StreamState>(StreamState.Idle)
     val streamState: StateFlow<StreamState> = _streamState.asStateFlow()
+
+    // Mirror of StreamService.levels, pushed from MainActivity's second collector. Null when idle.
+    private val _levels = MutableStateFlow<LevelSnapshot?>(null)
+    val levels: StateFlow<LevelSnapshot?> = _levels.asStateFlow()
 
     /**
      * Snapshot of the selected profile captured at the moment [start] was last invoked.
@@ -277,6 +282,11 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     /** ServiceConnection pushes the bound service's state in here. */
     fun onServiceStateChanged(state: StreamState) {
         _streamState.value = state
+    }
+
+    /** ServiceConnection pushes the bound service's level snapshots in here. */
+    fun onLevels(snapshot: LevelSnapshot?) {
+        _levels.value = snapshot
     }
 
     private fun missingPermissions(context: android.content.Context): List<String> {
