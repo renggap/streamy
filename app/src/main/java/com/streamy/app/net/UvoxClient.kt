@@ -28,6 +28,8 @@ class UvoxClient(
     private val sid: Int,
     private val password: String,
     private val mime: String, // "audio/mpeg" or "audio/aacp"
+    private val sampleRateHz: Int = 44_100, // used for AAC ADTS framing
+    private val channels: Int = 1,          // 1 = mono, 2 = stereo (AAC ADTS channel config)
 ) : SourceClient {
 
     private val dataClass: Int
@@ -88,11 +90,40 @@ class UvoxClient(
         }
     }
 
-    /** Wrap one encoded frame in a data message and write it. */
+    /**
+     * Wrap one encoded frame in a data message and write it. For AAC (audio/aacp) each raw AAC
+     * access unit is wrapped in a 7-byte ADTS header first — DNAS needs ADTS framing to parse
+     * AAC frame boundaries and bitrate; raw AAC is rejected after ~2s (live-verified) and the
+     * bitrate shows 0. ADTS fixes both the disconnect and the bitrate display. MP3 is sent raw
+     * (DNAS reads MP3 frame headers natively).
+     */
     override fun send(frame: ByteArray) {
         val o = out ?: throw IOException("client closed")
-        o.write(message(dataClass, dataType, frame))
+        val payload = if (dataClass == 8) wrapAdts(frame) else frame
+        o.write(message(dataClass, dataType, payload))
         o.flush()
+    }
+
+    /** Build a 7-byte (no-CRC) ADTS header around one AAC access unit. */
+    private fun wrapAdts(au: ByteArray): ByteArray {
+        val freqIdx = adtsFreqIndex(sampleRateHz)
+        val frameLen = au.size + 7
+        val out = ByteArray(7 + au.size)
+        out[0] = 0xFF.toByte()
+        out[1] = 0xF1.toByte() // MPEG-4, layer 0, protection_absent (no CRC)
+        out[2] = (((AAC_LC_PROFILE and 0x3) shl 6) or (freqIdx shl 2) or (channels ushr 2)).toByte()
+        out[3] = (((channels and 0x3) shl 4) or ((frameLen ushr 11) and 0x3)).toByte()
+        out[4] = ((frameLen ushr 3) and 0xFF).toByte()
+        out[5] = (((frameLen and 0x7) shl 5) or 0x1F).toByte() // buffer fullness high (VBR)
+        out[6] = 0xFC.toByte() // buffer fullness low + 1 raw data block
+        System.arraycopy(au, 0, out, 7, au.size)
+        return out
+    }
+
+    private fun adtsFreqIndex(sr: Int): Int = when (sr) {
+        96_000 -> 0; 88_200 -> 1; 64_000 -> 2; 48_000 -> 3; 44_100 -> 4
+        32_000 -> 5; 24_000 -> 6; 22_050 -> 7; 16_000 -> 8; 12_000 -> 9
+        11_025 -> 10; 8_000 -> 11; 7_350 -> 12; else -> 4
     }
 
     override fun close() {
@@ -160,6 +191,7 @@ class UvoxClient(
     companion object {
         private const val HANDSHAKE_TIMEOUT_MS = 6_000
         private val NULL_CHAR = 0.toChar() // ASCIIZ terminator used in Ultravox payloads
+        private const val AAC_LC_PROFILE = 1 // ADTS profile = objectType(2 for AAC-LC) - 1
 
         /** Pure: build a full Ultravox wire message (header + payload + 0x00 trailer). */
         fun message(cls: Int, type: Int, payload: ByteArray): ByteArray {

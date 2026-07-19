@@ -144,6 +144,8 @@ class StreamService : Service() {
                     host = profile.host, port = profile.port, sid = profile.sid,
                     password = profile.password,
                     mime = if (cfg.codec == Codec.AAC) "audio/aacp" else "audio/mpeg",
+                    sampleRateHz = cfg.sampleRateHz,
+                    channels = if (cfg.mono) 1 else 2,
                 )
 
                 // Assign + start under the monitor so a concurrent Stop can't orphan the
