@@ -1,37 +1,51 @@
 # Streamy App
 
-Android app that broadcasts **live speech** from the microphone to a **SHOUTcast v2 (DNAS2)** server, running reliably in the **background**, with user-selectable codec and bitrate. Hallmark-designed UI.
+Android app that broadcasts **live speech** from the microphone to a **SHOUTcast v2 (DNAS2)** server, running reliably in the **background**, with a Hallmark-designed broadcast-console UI.
 
-## Status
+[![status](https://img.shields.io/badge/status-v1.0.0-FF3B30)]() [![platform](https://img.shields.io/badge/platform-Android-3DDC84)]() [![minSdk](https://img.shields.io/badge/minSdk-24-00B0FF)]()
 
-End-to-end **live-verified** against a real DNAS2 v2.6.1 server: the app's `IcyClient` (real Kotlin client) publishes MP3 and the server reports `STREAMSTATUS=1`.
+## Features (v1.0.0)
 
-## Pipeline
+- **Live speech → SHOUTcast v2 (DNAS2)** — captures the mic, encodes, and streams over the real **Ultravox 2.1** source protocol (live-verified against DNAS2 2.6.1).
+- **MP3 encoding** via `libmp3lame` (NDK/JNI) — bitrates **16 / 24 / 48 / 64 / 96 / 128 / 192 kbps**, sample rates 16 / 22.05 / 44.1 / 48 kHz, mono/stereo. (AAC encoding is implemented via `MediaCodec` but disabled in the UI for v1.0.0 — being revisited.)
+- **Background streaming** — foreground service (`microphone` type) holding a `PARTIAL_WAKE_LOCK` + `WifiLock`; survives screen-off and backgrounding. `START_STICKY` reconnects after a process kill.
+- **Auto-reconnect** with exponential backoff (1→2→5→10→20s, 10 attempts) and an immediate **Stop-reconnect** control to abort during Connecting/Reconnecting/Error.
+- **Admin-free now-playing metadata** — in-stream title updates via Ultravox `0x902` XML metadata. **No DNAS admin user/password required**; just type and tap UPDATE while live.
+- **Real oscilloscope VU meter** — the actual mic PCM waveform (pre-encoder, RMS + decimated at ~30 fps) drawn as a glowing on-air-red trace with phosphor afterglow.
+- **Bitrate / sample-rate / channels** as compact dropdowns; codec toggle (MP3 active).
+- **Multiple server profiles** (Room) — host, port, stream id, password, mount, per-profile audio settings.
+- **Hallmark UI** — "late-night tally-light" theme (deep ink, on-air red, signal green, monospace readout), custom app icon + monochrome notification icon.
+- **Robust pipeline** — bounded drop-newest queue, idempotent teardown, setup/shutdown race guards, leak-free sockets/locks.
+
+## Architecture
 
 ```
-mic ──AudioRecord──> PCM ──> Encoder (AAC via MediaCodec | MP3 via libmp3lame NDK)
-      └──> StreamTransport (bounded queue + reconnect) ──> IcyClient (SHOUTcast v1 source) ──> DNAS2
+mic ──AudioRecord──> PCM ──> Encoder (MP3 libmp3lame | AAC MediaCodec)
+      └──> StreamTransport (bounded queue + reconnect) ──> UvoxClient (Ultravox 2.1) ──> DNAS2
+                                                    └──> in-stream 0x902 metadata
+      (pre-encoder tap ──> LevelFeed ──> VU meter)
 ```
 
-`StreamService` is a **foreground service** (type `microphone`) holding a `PARTIAL_WAKE_LOCK` + `WifiLock` so streaming survives screen-off / backgrounding. `START_STICKY` reconnects after a process kill.
+`StreamService` (foreground) owns the pipeline; `StreamyViewModel` mirrors state + levels for the Compose UI.
 
-## Protocol note (important)
+## Protocol notes (important)
 
-DNAS2 v2 here accepts the **SHOUTcast v1 source protocol** (password-line → `OK2` → icy headers → raw bytes), **not** Icecast HTTP-PUT and **not** Ultravox framing for MP3. Full details: [`docs/plans/2026-07-18-uvox-finding.md`](docs/plans/2026-07-18-uvox-finding.md).
+Reverse-engineered / live-verified against DNAS2 2.6.1 — see [`docs/plans/2026-07-18-uvox-finding.md`](docs/plans/2026-07-18-uvox-finding.md):
 
-## Bitrates
-
-- **MP3:** 16 / 24 / 48 / 64 / 96 / 128 / 192 kbps (LAME, verified on DNAS2)
-- **AAC:** 16 / 24 / 32 / 48 / 64 / 96 / 128 kbps (HE-AAC v1 at 16/24, mono) — **AAC-over-v1 on DNAS2 is unverified**; MP3 is the proven path.
+- DNAS2's v1 source protocol is **MP3-only** (it mislabels AAC as `audio/mpeg` and resets the source). AAC requires **Ultravox 2.1**.
+- The app uses the **Ultravox 2.1** source protocol for both codecs: cipher (`foobar`) → XTEA auth → mime → config → standby → data frames.
+- **AAC must be ADTS-wrapped** — DNAS rejects raw AAC after ~2s (`BrokenPipe`) and shows `BITRATE=0`; ADTS framing fixes both the disconnect and the bitrate display.
+- **In-stream `0x902` metadata** updates `SONGTITLE` with no admin creds.
+- `usesCleartextTraffic` is intentional — SHOUTcast source is plain TCP/http to user-defined servers.
 
 ## Build
 
 ```bash
 ./gradlew :app:assembleDebug          # debug APK (native MP3 lib included)
-./gradlew :app:testDebugUnitTest      # JVM unit tests (no network) — 17 tests
+./gradlew :app:testDebugUnitTest      # JVM unit tests (no network)
 ```
 
-Requires Android SDK + NDK 27.0.12077973 + CMake 3.22.1 (JDK 17/21, AGP 8.7.3, Kotlin 2.0.21).
+Requires Android SDK + NDK 27.0.12077973 + CMake 3.22.1 (JDK 17/21, AGP 8.7.3, Kotlin 2.0.21). APK: `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Test against a real server
 
@@ -43,31 +57,27 @@ streamy.test.sid=1
 streamy.test.password=...
 ```
 
-Live JVM test (real `IcyClient` → your server):
 ```bash
-./gradlew :app:testDebugUnitTest --tests "com.streamy.app.net.IcyClientLiveTest" --rerun-tasks \
-  -Dstreamy.host=$HOST   # creds read from local.properties via env; see test
-```
+# real Kotlin client → your DNAS2 (JVM, live)
+./gradlew :app:testDebugUnitTest --tests "com.streamy.app.net.UvoxClientLiveTest" --rerun-tasks
 
-Full-pipeline on-device (mic → encoder → service → server):
-```bash
+# full pipeline on a device (mic → encoder → service → server)
 ./gradlew :app:connectedDebugAndroidTest --tests "com.streamy.app.IntegrationTest"
 ```
 
-## Design & plan
+## Project structure
 
-- Design: [`docs/plans/2026-07-18-streamy-app-design.md`](docs/plans/2026-07-18-streamy-app-design.md)
-- Implementation plan: [`docs/plans/2026-07-18-streamy-app.md`](docs/plans/2026-07-18-streamy-app.md)
-- Protocol finding: [`docs/plans/2026-07-18-uvox-finding.md`](docs/plans/2026-07-18-uvox-finding.md)
+```
+app/src/main/java/com/streamy/app/
+  audio/    AudioCapture, Encoder, AacEncoder, Mp3Encoder (NDK), AudioPipeline, LevelTap/LevelFeed
+  net/      UvoxClient (Ultravox 2.1), UvoxXtea, SourceClient, StreamTransport, ProtocolException
+  service/  StreamService (foreground), StreamState, ServiceController
+  data/     Room: ProfileEntity/Dao/AppDatabase, AudioConfig, ProfileRepository
+  ui/       Theme, StreamyViewModel, Home, VuMeter, BitrateChooser, profiles, settings
+app/src/main/cpp/   libmp3lame (vendored, LGPL) + lame_jni.cpp + CMake
+docs/plans/         design + implementation plans + protocol findings
+```
 
-## Licensing
+## License
 
-`libmp3lame` (LAME) is **LGPL-2.0+**, vendored under `app/src/main/cpp/lame/` and built as a shared `.so`. Notice + source-offer in `app/src/main/res/raw/lame_notice.txt` (surfaced in-app → Settings). The rest of the app is the user's to license.
-
-## Known limitations / next steps
-
-- AAC-to-DNAS2-over-v1 unverified (likely needs Ultravox). MP3 is the verified default.
-- Now-playing metadata updates not wired (DNAS2 `admin.cgi?mode=updinfo` — needs admin creds).
-- No launcher icon (uses system default); branding pending.
-- Selected profile + codec/bitrate not persisted across process death (DataStore TODO).
-- Release `isMinifyEnabled=false`; enable after a minified release smoke test (JNI keep rules are staged in `proguard-rules.pro`).
+`libmp3lame` (LAME) is **LGPL-2.0+**, vendored under `app/src/main/cpp/lame/` and built as a shared `.so`. Notice + source-offer in `app/src/main/res/raw/lame_notice.txt` (surfaced in-app → Settings). The rest of the app is the author's to license.
