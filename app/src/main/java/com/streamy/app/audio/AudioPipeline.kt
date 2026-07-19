@@ -19,6 +19,7 @@ class AudioPipeline(
     private val encoder: Encoder,
     private val transport: StreamTransport,
     private val onMicBusy: () -> Unit,
+    private val levelFeed: LevelFeed? = null,
 ) {
     private var consecutiveShortReads = 0
 
@@ -33,6 +34,11 @@ class AudioPipeline(
                 consecutiveShortReads = 0
             }
             for (frame in encoder.encode(pcm)) transport.enqueue(frame)
+            // Pre-encoder level tap. Additive only — null feed (default) means zero work,
+            // so the MP3/AAC streaming path is unchanged when no meter is attached.
+            levelFeed?.let { feed ->
+                feed.push(LevelSnapshot(LevelTap.decimate(pcm, 96), LevelTap.rmsDb(pcm)), System.nanoTime())
+            }
             true
         }
     }
