@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.streamy.app.data.AudioConfig
 import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.Codec
 import com.streamy.app.data.db.ProfileEntity
@@ -211,10 +212,12 @@ fun EditProfileScreen(
                         bitrate = ladder.minBy { kotlin.math.abs(it - bitrate) }
                     }
                     if (AudioConfigRules.needsHeAac(c, bitrate)) mono = true
+                    sampleRate = AudioConfigRules.clamp(AudioConfig(c, bitrate, sampleRate, mono)).sampleRateHz
                 },
                 onBitrate = { kbps ->
                     bitrate = kbps
                     if (AudioConfigRules.needsHeAac(codec, kbps)) mono = true
+                    sampleRate = AudioConfigRules.clamp(AudioConfig(codec, kbps, sampleRate, mono)).sampleRateHz
                 },
                 onSampleRate = { sampleRate = it },
                 onMono = { b ->

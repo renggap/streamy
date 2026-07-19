@@ -130,7 +130,7 @@ fun BitrateChooser(
             label = "SAMPLE RATE",
             selected = sampleRate.toKHz(),
             enabled = enabled,
-            options = AudioConfigRules.SAMPLE_RATES.map { it to it.toKHz() },
+            options = AudioConfigRules.validSampleRatesFor(codec, bitrate).map { it to it.toKHz() },
             onSelect = { onSampleRate(it) },
         )
 

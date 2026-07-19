@@ -23,6 +23,7 @@ import com.streamy.app.audio.Encoder
 import com.streamy.app.audio.EncoderFactory
 import com.streamy.app.audio.LevelFeed
 import com.streamy.app.audio.LevelSnapshot
+import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.Codec
 import com.streamy.app.data.ProfileRepository
 import com.streamy.app.data.db.AppDatabase
@@ -131,7 +132,9 @@ class StreamService : Service() {
                     return@launch
                 }
                 profileName = profile.name
-                val cfg = ProfileRepository.toAudioConfig(profile)
+                // Clamp impossible combos (MP3 16/24 kbps + 44.1/48 kHz → 22.05 kHz MPEG-2) so
+                // capture + encoder agree and LAME doesn't bump the bitrate (24→32) silently.
+                val cfg = AudioConfigRules.clamp(ProfileRepository.toAudioConfig(profile))
 
                 // Heavy setup OUTSIDE the monitor: native encoder alloc + source-client ctor
                 // (no socket yet — connect() runs later from the transport coroutine).

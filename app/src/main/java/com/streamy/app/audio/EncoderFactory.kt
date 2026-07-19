@@ -13,10 +13,13 @@ import com.streamy.app.data.Codec
  */
 object EncoderFactory {
     fun create(cfg: AudioConfig): Encoder {
-        AudioConfigRules.validate(cfg)
-        return when (cfg.codec) {
-            Codec.AAC -> AacEncoder(cfg.sampleRateHz, cfg.bitrateKbps * 1000, cfg.mono)
-            Codec.MP3 -> Mp3Encoder(cfg.sampleRateHz, cfg.bitrateKbps, cfg.mono)
+        // Clamp impossible combos first (e.g. MP3 16/24 kbps + 44.1 kHz → 22.05 kHz MPEG-2),
+        // so the encoder always produces the requested bitrate instead of LAME bumping 24→32.
+        val c = AudioConfigRules.clamp(cfg)
+        AudioConfigRules.validate(c)
+        return when (c.codec) {
+            Codec.AAC -> AacEncoder(c.sampleRateHz, c.bitrateKbps * 1000, c.mono)
+            Codec.MP3 -> Mp3Encoder(c.sampleRateHz, c.bitrateKbps, c.mono)
         }
     }
 }

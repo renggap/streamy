@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import com.streamy.app.audio.LevelSnapshot
+import com.streamy.app.data.AudioConfig
 import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.Codec
 import com.streamy.app.data.db.AppDatabase
@@ -157,7 +158,10 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         val newBitrate = if (p.bitrateKbps in ladder) p.bitrateKbps
         else ladder.minBy { kotlin.math.abs(it - p.bitrateKbps) }
         val newMono = if (AudioConfigRules.needsHeAac(c, newBitrate)) true else p.mono
-        updateProfileAudio(p.copy(codec = c.name, bitrateKbps = newBitrate, mono = newMono))
+        // MP3 16/24 kbps needs ≤ 24 kHz (MPEG-2); clamp the sample rate so the encoder actually
+        // produces the requested bitrate instead of LAME bumping it (24→32).
+        val newSr = AudioConfigRules.clamp(AudioConfig(c, newBitrate, p.sampleRateHz, newMono)).sampleRateHz
+        updateProfileAudio(p.copy(codec = c.name, bitrateKbps = newBitrate, mono = newMono, sampleRateHz = newSr))
     }
 
     fun setBitrate(kbps: Int) {
@@ -168,7 +172,8 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
                      else AudioConfigRules.MP3_BITRATES
         require(kbps in ladder) { "bitrate $kbps not in ladder $ladder" }
         val newMono = if (AudioConfigRules.needsHeAac(p.codecEnum(), kbps)) true else p.mono
-        updateProfileAudio(p.copy(bitrateKbps = kbps, mono = newMono))
+        val newSr = AudioConfigRules.clamp(AudioConfig(p.codecEnum(), kbps, p.sampleRateHz, newMono)).sampleRateHz
+        updateProfileAudio(p.copy(bitrateKbps = kbps, mono = newMono, sampleRateHz = newSr))
     }
 
     fun setSampleRate(hz: Int) {
