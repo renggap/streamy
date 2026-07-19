@@ -24,12 +24,12 @@ class IcyClient(
     private val port: Int,
     private val password: String,
     private val mount: String,   // unused by the v1 login (DNAS2 maps by source creds/sid); kept for Icecast parity / future use
-) {
+) : SourceClient {
     private var socket: Socket? = null
     private var out: java.io.OutputStream? = null
     private var inStream: InputStream? = null
 
-    fun connect(bitrateKbps: Int, name: String, genre: String) {
+    override fun connect(bitrateKbps: Int, name: String, genre: String) {
         // Close any prior socket so a reconnect never leaks the old one (also nukes stale
         // out/inStream so a concurrent send() throws "client closed" instead of writing to a
         // dead stream).
@@ -69,12 +69,12 @@ class IcyClient(
     // ponytail: no write-side timeout — keepAlive probes only fire after the OS's TCP_KEEPIDLE
     // (~2h on Linux), so a black-holed peer can wedge send() indefinitely. Wrap send() in
     // withTimeout once the transport owns a coroutine-based writer; deferred (Task: writer-timeout).
-    fun send(frame: ByteArray) {
+    override fun send(frame: ByteArray) {
         val o = out ?: throw java.io.IOException("client closed")
         o.write(frame); o.flush()
     }
 
-    fun close() {
+    override fun close() {
         try { socket?.close() } catch (_: Throwable) {} finally { socket = null; out = null; inStream = null }
     }
 

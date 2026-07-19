@@ -226,13 +226,8 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
             _userMessage.value = "No profile selected"
             return
         }
-        // AAC guard (interim): DNAS2's v1 source protocol is MP3-only — AAC bytes get
-        // mislabeled audio/mpeg and the source drops every few seconds. AAC needs Ultravox
-        // (not wired yet). Block the broken path; AacEncoder stays intact for future uvox.
-        if (selectedProfile.value?.codec == "AAC") {
-            _userMessage.value = "AAC isn't supported on SHOUTcast v2 (needs the Ultravox protocol) — use MP3"
-            return
-        }
+        // AAC now streams via the Ultravox 2.1 source client (UvoxClient) in StreamService —
+        // DNAS2 reports it as audio/aacp. MP3 rides the v1 source client. No codec guard needed.
         val needed = missingPermissions(ctx)
         if (needed.isNotEmpty()) {
             pendingStartProfileId = profileId

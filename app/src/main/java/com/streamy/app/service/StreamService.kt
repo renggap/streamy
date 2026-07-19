@@ -21,12 +21,15 @@ import com.streamy.app.audio.AudioCapture
 import com.streamy.app.audio.AudioPipeline
 import com.streamy.app.audio.Encoder
 import com.streamy.app.audio.EncoderFactory
+import com.streamy.app.data.Codec
 import com.streamy.app.data.ProfileRepository
 import com.streamy.app.data.db.AppDatabase
 import com.streamy.app.R
 import com.streamy.app.net.IcyClient
+import com.streamy.app.net.SourceClient
 import com.streamy.app.net.StreamTransport
 import com.streamy.app.net.TransportState
+import com.streamy.app.net.UvoxClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -60,7 +63,7 @@ class StreamService : Service() {
 
     private var transport: StreamTransport? = null
     private var pipeline: AudioPipeline? = null
-    private var client: IcyClient? = null
+    private var client: SourceClient? = null
     private var encoder: Encoder? = null
     private var profileName: String? = null
 
@@ -116,14 +119,18 @@ class StreamService : Service() {
                 profileName = profile.name
                 val cfg = ProfileRepository.toAudioConfig(profile)
 
-                // Heavy setup OUTSIDE the monitor: native encoder alloc + IcyClient ctor
+                // Heavy setup OUTSIDE the monitor: native encoder alloc + source-client ctor
                 // (no socket yet — connect() runs later from the transport coroutine).
                 val enc = EncoderFactory.create(cfg)
 
-                // IcyClient speaks the SHOUTcast v1 source protocol — verified live against
-                // DNAS2 v2.6.1 (raw MP3, no Ultravox needed). AAC-over-v1 on DNAS2 is unverified;
-                // MP3 is the proven path. See docs/plans/2026-07-18-uvox-finding.md.
-                val icy = IcyClient(profile.host, profile.port, profile.password, profile.mount)
+                // Pick the source transport by codec. AAC needs the Ultravox 2.1 protocol
+                // (DNAS2's v1 source is MP3-only and mislabels AAC); MP3 rides the v1 protocol.
+                // Both implement SourceClient. See docs/plans/2026-07-18-uvox-finding.md.
+                val source: SourceClient = if (cfg.codec == Codec.AAC) {
+                    UvoxClient(profile.host, profile.port, profile.sid, profile.password, mime = "audio/aacp")
+                } else {
+                    IcyClient(profile.host, profile.port, profile.password, profile.mount)
+                }
 
                 // Assign + start under the monitor so a concurrent Stop can't orphan the
                 // transport / audio thread / native encoder. Re-check shuttingDown in case a
@@ -131,15 +138,16 @@ class StreamService : Service() {
                 synchronized(this) {
                     if (shuttingDown) {
                         runCatching { enc.close() }
+                        runCatching { source.close() }
                         return@launch
                     }
                     encoder = enc
-                    client = icy
+                    client = source
                     _state.value = StreamState.Connecting
                     val t = StreamTransport(
                         scope = scope,
-                        connect = { icy.connect(cfg.bitrateKbps, profile.name, "Speech") },
-                        send = { icy.send(it) },
+                        connect = { source.connect(cfg.bitrateKbps, profile.name, "Speech") },
+                        send = { source.send(it) },
                         onState = { ts -> ts.toStreamState()?.let { s -> _state.value = s } },
                     )
                     transport = t
