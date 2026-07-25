@@ -12,11 +12,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +48,7 @@ import com.streamy.app.R
  * ponytail: move cleartext-traffic note into a proper network-security-config doc in
  * Task 14 release config. Mentioned here as a dev-only warning.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     vm: StreamyViewModel,
@@ -49,6 +57,10 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val profiles by vm.profiles.collectAsStateWithLifecycle()
+    val inputDevices by vm.inputDevices.collectAsStateWithLifecycle()
+    val selectedDevice by vm.selectedDeviceName.collectAsStateWithLifecycle()
+    var deviceExpanded by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { vm.refreshInputDevices() }
     var pendingClear by remember { mutableStateOf(false) }
 
     val version by produceState(initialValue = "—") {
@@ -94,6 +106,59 @@ fun SettingsScreen(
             Text(
                 "Version $version",
                 style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        FieldGroup("INPUT DEVICE") {
+            ExposedDropdownMenuBox(
+                expanded = deviceExpanded,
+                onExpandedChange = { deviceExpanded = it },
+            ) {
+                OutlinedTextField(
+                    value = selectedDevice ?: "System default",
+                    onValueChange = {},
+                    readOnly = true,
+                    singleLine = true,
+                    shape = RoundedCornerShape(4.dp),
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = deviceExpanded)
+                    },
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.background,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                        disabledContainerColor = MaterialTheme.colorScheme.background,
+                        focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                        unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                )
+                ExposedDropdownMenu(
+                    expanded = deviceExpanded,
+                    onDismissRequest = { deviceExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("System default", style = MaterialTheme.typography.bodyMedium) },
+                        onClick = { vm.setInputDevice(null); deviceExpanded = false },
+                    )
+                    inputDevices.forEach { d ->
+                        DropdownMenuItem(
+                            text = { Text(d.name, style = MaterialTheme.typography.bodyMedium) },
+                            onClick = { vm.setInputDevice(d.name); deviceExpanded = false },
+                        )
+                    }
+                }
+            }
+            Text(
+                "Selected mic applies on the next stream start. The device is matched by name " +
+                    "each session — replug/ reboot safe.",
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

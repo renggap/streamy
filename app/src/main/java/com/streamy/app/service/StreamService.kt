@@ -8,6 +8,8 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.net.wifi.WifiManager
 import android.os.Binder
 import android.os.Build
@@ -23,6 +25,10 @@ import com.streamy.app.audio.Encoder
 import com.streamy.app.audio.EncoderFactory
 import com.streamy.app.audio.LevelFeed
 import com.streamy.app.audio.LevelSnapshot
+import com.streamy.app.audio.Mp3DirectSink
+import com.streamy.app.audio.Mp3TranscodeSink
+import com.streamy.app.audio.StreamSink
+import com.streamy.app.data.AudioConfig
 import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.Codec
 import com.streamy.app.data.ProfileRepository
@@ -40,13 +46,23 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Foreground microphone service that owns the live broadcast pipeline:
  * Room lookup -> [EncoderFactory] -> [UvoxClient] over [StreamTransport] -> [AudioPipeline].
  *
- * Lifecycle: [onStartCommand] routes [ACTION_START]/[ACTION_STOP]/[ACTION_META]; [stopAndShutdown]
+ * Lifecycle: [onStartCommand] routes START/STOP/META/RECORD actions; [stopAndShutdown]
  * is the single idempotent teardown path used by every error/stop branch.
+ *
+ * Live mic settings: [micGain] is held here (not on AudioCapture, which is recreated each
+ * start) so it survives across stop→start and seeds the next [AudioCapture]. The selected
+ * input device NAME arrives via the START intent (never SharedPreferences — apply() can lose
+ * a race with an immediate start) and is resolved to a live [AudioDeviceInfo] per session.
  *
  * ponytail: skip DI / media-session / separate :stream process — single service, one scope,
  *  add Hilt when config sprawl justifies it (Task 14).
@@ -62,6 +78,12 @@ class StreamService : Service() {
     private val levelFeed = LevelFeed()
     val levels: StateFlow<LevelSnapshot?> = levelFeed.flow
 
+    // Local MP3 recording state. recordingPath = last/active file; isRecording = armed.
+    private val _recordingPath = MutableStateFlow<String?>(null)
+    val recordingPath: StateFlow<String?> = _recordingPath.asStateFlow()
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+
     private val db by lazy {
         Room.databaseBuilder(this, AppDatabase::class.java, "streamy.db")
             .addMigrations(AppDatabase.MIGRATION_1_2)
@@ -69,10 +91,16 @@ class StreamService : Service() {
     }
 
     private var transport: StreamTransport? = null
-    private var pipeline: AudioPipeline? = null
+    @Volatile private var pipeline: AudioPipeline? = null
     private var client: SourceClient? = null
     private var encoder: Encoder? = null
     private var profileName: String? = null
+
+    /** Snapshot of the running encode config — drives MP3-vs-transcode sink selection. */
+    @Volatile private var liveCfg: AudioConfig? = null
+
+    /** Mic gain held at service scope so it survives AudioCapture recreation. Seeded by VM via binder. */
+    @Volatile private var micGain: Float = 1.0f
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
@@ -103,7 +131,7 @@ class StreamService : Service() {
                     _state.value = StreamState.Error("profile_missing")
                     stopAndShutdown()
                 } else {
-                    startWithProfile(id)
+                    startWithProfile(id, intent.getStringExtra(EXTRA_DEVICE_NAME))
                 }
             }
             ACTION_STOP -> stopAndShutdown()
@@ -115,11 +143,13 @@ class StreamService : Service() {
                     }
                 }
             }
+            ACTION_RECORD_ON -> startRecording()
+            ACTION_RECORD_OFF -> stopRecording()
         }
         return START_STICKY
     }
 
-    private fun startWithProfile(profileId: Long) {
+    private fun startWithProfile(profileId: Long, deviceName: String?) {
         // Fresh start: clear any prior shutdown so a subsequent teardown actually runs
         // (matters when the bound service instance is reused across Stop -> Start).
         synchronized(this) { shuttingDown = false }
@@ -135,6 +165,7 @@ class StreamService : Service() {
                 // Clamp impossible combos (MP3 16/24 kbps + 44.1/48 kHz → 22.05 kHz MPEG-2) so
                 // capture + encoder agree and LAME doesn't bump the bitrate (24→32) silently.
                 val cfg = AudioConfigRules.clamp(ProfileRepository.toAudioConfig(profile))
+                liveCfg = cfg
 
                 // Heavy setup OUTSIDE the monitor: native encoder alloc + source-client ctor
                 // (no socket yet — connect() runs later from the transport coroutine).
@@ -151,17 +182,25 @@ class StreamService : Service() {
                     channels = if (cfg.mono) 1 else 2,
                 )
 
-                // Assign + start under the monitor so a concurrent Stop can't orphan the
-                // transport / audio thread / native encoder. Re-check shuttingDown in case a
-                // Stop arrived during the setup above — if so, tear down what we just built.
-                synchronized(this) {
+                // Resolve the user-selected input device by NAME for THIS session (ids are not
+                // stable across reboot/USB replug). Null → default mic.
+                val preferredDevice = resolvePreferredDevice(deviceName)
+
+                // Assign + start under the service monitor so a concurrent Stop can't orphan the
+                // transport / audio thread / native encoder. (Lock the SERVICE, not the coroutine
+                // scope, so this excludes [stopAndShutdown]'s @Synchronized.) Re-check shuttingDown
+                // in case a Stop arrived during setup — and recycle any prior live session so a
+                // double ACTION_START can't leak an AudioRecord/encoder/socket.
+                synchronized(this@StreamService) {
                     if (shuttingDown) {
                         runCatching { enc.close() }
                         runCatching { source.close() }
                         return@launch
                     }
+                    closeOrphans()
                     encoder = enc
                     client = source
+                    liveCfg = cfg
                     _state.value = StreamState.Connecting
                     val t = StreamTransport(
                         scope = scope,
@@ -171,7 +210,12 @@ class StreamService : Service() {
                     )
                     transport = t
                     val p = AudioPipeline(
-                        capture = AudioCapture(cfg.sampleRateHz, cfg.mono),
+                        capture = AudioCapture(
+                            sampleRateHz = cfg.sampleRateHz,
+                            mono = cfg.mono,
+                            initialGain = micGain,
+                            preferredDevice = preferredDevice,
+                        ),
                         encoder = enc,
                         transport = t,
                         onMicBusy = {
@@ -191,6 +235,67 @@ class StreamService : Service() {
                 stopAndShutdown()
             }
         }
+    }
+
+    /** Push a live mic gain from the UI; applied immediately if streaming, else stashed for next start. */
+    fun setMicGain(g: Float) {
+        micGain = g
+        pipeline?.setGain(g)
+    }
+
+    // ---- Local MP3 recording ----
+
+    /** Arm recording. Only valid while Live; file + sink are built off the audio thread.
+     *  The [_isRecording] flag is claimed synchronously on the main thread (onStartCommand is
+     *  serial) before the IO launch so a rapid double-tap can't arm two sinks; the sink is then
+     *  registered under the service monitor so a concurrent stopAndShutdown can't orphan it. */
+    private fun startRecording() {
+        if (_state.value !is StreamState.Live) return
+        if (liveCfg == null) return
+        if (_isRecording.value) return          // already armed — ignore double ACTION_RECORD_ON
+        _isRecording.value = true
+        val cfg = liveCfg ?: run { _isRecording.value = false; return }
+        scope.launch(Dispatchers.IO) {
+            val built: StreamSink? = try {
+                val base = getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC) ?: null
+                if (base == null) null else {
+                    val dir = File(base, "Streamy").apply { mkdirs() }
+                    val file = File(dir, "streamy-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}.mp3")
+                    // MP3 stream → write frames as-is (zero re-encode). AAC stream → transcode via LAME.
+                    val sink: StreamSink = if (cfg.codec == Codec.MP3)
+                        Mp3DirectSink(FileOutputStream(file))
+                    else Mp3TranscodeSink(FileOutputStream(file), cfg.sampleRateHz, cfg.mono)
+                    _recordingPath.value = file.absolutePath
+                    sink
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "record file open failed", e); null
+            }
+            if (built == null) { _isRecording.value = false; return@launch }
+            // Arm under the service monitor so a teardown that nulled the pipeline can't leave the
+            // sink orphaned; close the just-built sink on bail (fd + native LAME).
+            synchronized(this@StreamService) {
+                if (shuttingDown || pipeline == null) {
+                    runCatching { built.flush(); built.close() }
+                    _isRecording.value = false
+                } else {
+                    pipeline?.armRecord(built)
+                }
+            }
+        }
+    }
+
+    private fun stopRecording() {
+        _isRecording.value = false
+        pipeline?.disarmRecord()
+    }
+
+    /** Resolve a previously-selected input device by productName (ids are not stable across reboots). */
+    private fun resolvePreferredDevice(name: String?): AudioDeviceInfo? {
+        if (name.isNullOrBlank()) return null
+        val am = getSystemService(AUDIO_SERVICE) as AudioManager
+        return am.getDevices(AudioManager.GET_DEVICES_INPUTS)
+            .firstOrNull { it.isSource && it.productName?.toString() == name }
     }
 
     /**
@@ -243,13 +348,8 @@ class StreamService : Service() {
     fun stopAndShutdown() {
         if (shuttingDown) return
         shuttingDown = true
-        for (step in listOf(
-            { try { pipeline?.stop() } catch (e: Throwable) { Log.e(TAG, "pipeline.stop", e) } },
-            { try { transport?.stop() } catch (e: Throwable) { Log.e(TAG, "transport.stop", e) } },
-            { try { client?.close() } catch (e: Throwable) { Log.e(TAG, "client.close", e) } },
-            { try { encoder?.close() } catch (e: Throwable) { Log.e(TAG, "encoder.close", e) } },
-        )) step()
-        pipeline = null; transport = null; client = null; encoder = null
+        _isRecording.value = false
+        closeOrphans()
         levelFeed.reset()
         releaseLocks()
         _state.value = StreamState.Idle
@@ -260,6 +360,19 @@ class StreamService : Service() {
             Log.e(TAG, "stopForeground", e)
         }
         stopSelf()
+    }
+
+    /** Stop + null the current session's resources WITHOUT flipping shutdown state, releasing
+     *  locks, or stopping the foreground notification — used by [stopAndShutdown] and to recycle
+     *  a prior session when a fresh [startWithProfile] arrives (double ACTION_START guard). */
+    private fun closeOrphans() {
+        for (step in listOf(
+            { try { pipeline?.stop() } catch (e: Throwable) { Log.e(TAG, "pipeline.stop", e) } },
+            { try { transport?.stop() } catch (e: Throwable) { Log.e(TAG, "transport.stop", e) } },
+            { try { client?.close() } catch (e: Throwable) { Log.e(TAG, "client.close", e) } },
+            { try { encoder?.close() } catch (e: Throwable) { Log.e(TAG, "encoder.close", e) } },
+        )) step()
+        pipeline = null; transport = null; client = null; encoder = null; liveCfg = null
     }
 
     override fun onDestroy() {
@@ -335,8 +448,11 @@ class StreamService : Service() {
         const val ACTION_START = "com.streamy.app.action.START"
         const val ACTION_STOP = "com.streamy.app.action.STOP"
         const val ACTION_META = "com.streamy.app.action.META"
+        const val ACTION_RECORD_ON = "com.streamy.app.action.RECORD_ON"
+        const val ACTION_RECORD_OFF = "com.streamy.app.action.RECORD_OFF"
         const val EXTRA_PROFILE_ID = "com.streamy.app.extra.PROFILE_ID"
         const val EXTRA_TITLE = "com.streamy.app.extra.TITLE"
+        const val EXTRA_DEVICE_NAME = "com.streamy.app.extra.DEVICE_NAME"
         const val NOTIF_ID = 0x5bee7
     }
 }

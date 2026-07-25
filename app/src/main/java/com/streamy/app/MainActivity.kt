@@ -12,7 +12,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
@@ -27,6 +26,7 @@ import com.streamy.app.service.StreamState
 import com.streamy.app.ui.StreamyNavigation
 import com.streamy.app.ui.StreamyTheme
 import com.streamy.app.ui.StreamyViewModel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -68,6 +68,13 @@ class MainActivity : ComponentActivity() {
             // lifecycleScope auto-cancels on destroy, so the collectors die with the Activity.
             lifecycleScope.launch { s.state.collect { vm.onServiceStateChanged(it) } }
             lifecycleScope.launch { s.levels.collect { vm.onLevels(it) } }
+            lifecycleScope.launch {
+                s.isRecording.combine(s.recordingPath) { on, path -> on to path }
+                    .collect { (on, path) -> vm.onRecording(on, path) }
+            }
+            // Push live mic gain to the service. StateFlow's first emission hydrates the service's
+            // micGain on bind — before any start — so the first frame is never at unity by mistake.
+            lifecycleScope.launch { vm.micGain.collect { s.setMicGain(it) } }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -96,7 +103,7 @@ class MainActivity : ComponentActivity() {
                         if (perms.isNotEmpty()) permissionLauncher.launch(perms.toTypedArray())
                     }
 
-                    Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+                    Box(Modifier.fillMaxSize()) {
                         StreamyNavigation(vm = vm)
                     }
                 }

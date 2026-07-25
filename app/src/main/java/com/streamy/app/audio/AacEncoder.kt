@@ -17,12 +17,14 @@ class AacEncoder(
         setInteger(MediaFormat.KEY_SAMPLE_RATE, sampleRateHz)
         setInteger(MediaFormat.KEY_CHANNEL_COUNT, if (mono) 1 else 2)
         setInteger(MediaFormat.KEY_BIT_RATE, bitrateBps)
+        // AAC is HE-AAC v1 (AAC-LC + SBR) across the whole bitrate ladder — better quality per
+        // bit than AAC-LC, which is what speech-grade low-bitrate broadcast needs.
         setInteger(MediaFormat.KEY_AAC_PROFILE, aacObjectType(bitrateBps / 1000))
         setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384)
     }
     private val info = MediaCodec.BufferInfo()
     @Volatile private var eos = false
-    private var closed = false
+    @Volatile private var closed = false
 
     init { codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE); codec.start() }
 
@@ -71,14 +73,12 @@ class AacEncoder(
         }
     }
 
-    // ponytail: ADTS-strip heuristic is a placeholder. MediaCodec AAC encoders may already emit raw
-    // packets (no ADTS) depending on KEY_AAC_ENCODED_TARGET_FORMAT. Task 13 integration confirms what the
-    // real DNAS2 expects; if it needs ADTS, set KEY_AAC_ENCODED_TARGET_FORMAT = ADTS and STOP stripping.
+    // MediaCodec's AAC encoder emits RAW access units (AOSP AACEncoder hardcodes adtsUsed=0; the
+    // ADTS header is added by the file/sink writer). KEY_IS_ADTS is decoder-only — there is no
+    // encoder key to emit ADTS directly. So there is nothing to strip here; [UvoxClient.send]
+    // re-wraps each AU in a 7-byte ADTS header for the 0x8003 data message.
     private fun stripAdts(buf: java.nio.ByteBuffer, len: Int): ByteArray {
-        val pos = buf.position()
-        val total = buf.limit() - pos
-        if (len in 7..9 && total > len) buf.position(pos + len)   // crude: drop ADTS-sized prefix
-        val raw = ByteArray(total - (buf.position() - pos))
+        val raw = ByteArray(len)
         buf.get(raw)
         return raw
     }
@@ -90,9 +90,10 @@ class AacEncoder(
     }
 
     companion object {
-        /** 16/24k → HE-AAC v1, else AAC-LC. Pure → unit tested. */
+        /** AAC is HE-AAC v1 (AAC-LC + SBR) across the whole ladder — AAC-LC retired. Pure → unit tested.
+         *  ponytail: switch ≤24 kbps mono to HE-AAC v2 (AACObjectHEV2, +Parametric Stereo) for even
+         *  better speech quality once verified on-device against DNAS2. */
         fun aacObjectType(bitrateKbps: Int) =
-            if (bitrateKbps <= 24) MediaCodecInfo.CodecProfileLevel.AACObjectHE
-            else MediaCodecInfo.CodecProfileLevel.AACObjectLC
+            MediaCodecInfo.CodecProfileLevel.AACObjectHE
     }
 }

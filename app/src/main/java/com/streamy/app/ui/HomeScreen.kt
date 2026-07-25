@@ -23,17 +23,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Snackbar
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.service.StreamState
+import kotlin.math.roundToInt
 
 /*
  * Hallmark · screen: Home · macrostructure: Workbench (broadcast console) · theme: custom
@@ -67,13 +66,11 @@ import com.streamy.app.service.StreamState
 fun HomeScreen(
     vm: StreamyViewModel,
     onManageProfiles: () -> Unit,
-    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by vm.streamState.collectAsStateWithLifecycle()
     val profiles by vm.profiles.collectAsStateWithLifecycle()
     val selectedProfile by vm.selectedProfile.collectAsStateWithLifecycle()
-    val message by vm.userMessage.collectAsStateWithLifecycle()
     val needsRestart by vm.needsRestartToApply.collectAsStateWithLifecycle()
 
     val codec by vm.codec.collectAsStateWithLifecycle()
@@ -81,16 +78,11 @@ fun HomeScreen(
     val sampleRate by vm.sampleRate.collectAsStateWithLifecycle()
     val mono by vm.mono.collectAsStateWithLifecycle()
     val levels by vm.levels.collectAsStateWithLifecycle()
+    val micGain by vm.micGain.collectAsStateWithLifecycle()
+    val isRecording by vm.isRecording.collectAsStateWithLifecycle()
+    val recordingPath by vm.recordingPath.collectAsStateWithLifecycle()
 
-    var nowPlaying by remember { mutableStateOf("") }
-
-    val snackbarHost = remember { SnackbarHostState() }
-    LaunchedEffect(message) {
-        message?.let {
-            snackbarHost.showSnackbar(it)
-            vm.consumeMessage()
-        }
-    }
+    var nowPlaying by rememberSaveable { mutableStateOf("") }
 
     val isLive = state is StreamState.Live
     val isBusy = state is StreamState.Connecting || state is StreamState.Reconnecting
@@ -103,10 +95,10 @@ fun HomeScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .padding(top = 24.dp, bottom = 96.dp),
+                .padding(top = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(28.dp),
         ) {
-            Masthead(onOpenSettings = onOpenSettings)
+            Masthead()
 
             StatePill(state = state)
 
@@ -118,6 +110,15 @@ fun HomeScreen(
             )
 
             VuMeter(snapshot = levels)
+
+            MicVolumeSlider(gain = micGain, onChange = vm::setMicGain)
+
+            RecordControl(
+                isLive = isLive,
+                isRecording = isRecording,
+                recordingPath = recordingPath,
+                onToggle = vm::toggleRecording,
+            )
 
             if (needsRestart) {
                 Hint(
@@ -158,42 +159,25 @@ fun HomeScreen(
                 NoProfileHint(onManageProfiles = onManageProfiles)
             }
         }
-
-        SnackbarHost(
-            hostState = snackbarHost,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
-        ) { data -> Snackbar(snackbarData = data) }
     }
 }
 
 // ---- Masthead ----
 
 @Composable
-private fun Masthead(onOpenSettings: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = "STREAMY",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                letterSpacing = 6.sp,
-            )
-            Text(
-                text = "On-air console",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        TextButton(
-            onClick = onOpenSettings,
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        ) {
-            Text("SETTINGS", style = MaterialTheme.typography.labelLarge)
-        }
+private fun Masthead() {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = "STREAMY",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            letterSpacing = 6.sp,
+        )
+        Text(
+            text = "On-air console",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -511,5 +495,78 @@ private fun Hint(text: String, tone: HintTone) {
                 .background(color, androidx.compose.foundation.shape.CircleShape),
         )
         Text(text, style = MaterialTheme.typography.bodyMedium, color = color)
+    }
+}
+
+// ---- Mic volume (software gain) ----
+
+@Composable
+private fun MicVolumeSlider(gain: Float, onChange: (Float) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                "MIC VOLUME",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "${(gain * 100f).roundToInt()}%",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = gain,
+            onValueChange = onChange,
+            // 0 (mute) – 200 % (+6 dB, hard-clips past 100 %). steps = (range/step) - 1 = 39.
+            valueRange = 0f..2f,
+            steps = 39,
+        )
+    }
+}
+
+// ---- Local MP3 recording toggle ----
+
+@Composable
+private fun RecordControl(
+    isLive: Boolean,
+    isRecording: Boolean,
+    recordingPath: String?,
+    onToggle: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+            onClick = onToggle,
+            enabled = isLive,
+            shape = RoundedCornerShape(4.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isRecording) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = if (isRecording) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+            contentPadding = PaddingValues(vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                if (isRecording) "STOP RECORDING" else "RECORD MP3",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 2.sp,
+            )
+        }
+        if (recordingPath != null) {
+            Text(
+                "Saving to: $recordingPath",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

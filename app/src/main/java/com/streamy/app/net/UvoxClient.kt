@@ -108,27 +108,8 @@ class UvoxClient(
         o.flush()
     }
 
-    /** Build a 7-byte (no-CRC) ADTS header around one AAC access unit. */
-    private fun wrapAdts(au: ByteArray): ByteArray {
-        val freqIdx = adtsFreqIndex(sampleRateHz)
-        val frameLen = au.size + 7
-        val out = ByteArray(7 + au.size)
-        out[0] = 0xFF.toByte()
-        out[1] = 0xF1.toByte() // MPEG-4, layer 0, protection_absent (no CRC)
-        out[2] = (((AAC_LC_PROFILE and 0x3) shl 6) or (freqIdx shl 2) or (channels ushr 2)).toByte()
-        out[3] = (((channels and 0x3) shl 4) or ((frameLen ushr 11) and 0x3)).toByte()
-        out[4] = ((frameLen ushr 3) and 0xFF).toByte()
-        out[5] = (((frameLen and 0x7) shl 5) or 0x1F).toByte() // buffer fullness high (VBR)
-        out[6] = 0xFC.toByte() // buffer fullness low + 1 raw data block
-        System.arraycopy(au, 0, out, 7, au.size)
-        return out
-    }
-
-    private fun adtsFreqIndex(sr: Int): Int = when (sr) {
-        96_000 -> 0; 88_200 -> 1; 64_000 -> 2; 48_000 -> 3; 44_100 -> 4
-        32_000 -> 5; 24_000 -> 6; 22_050 -> 7; 16_000 -> 8; 12_000 -> 9
-        11_025 -> 10; 8_000 -> 11; 7_350 -> 12; else -> 4
-    }
+    /** Build a 7-byte (no-CRC) ADTS header around one AAC access unit — see [adtsHeader]. */
+    private fun wrapAdts(au: ByteArray): ByteArray = adtsHeader(au, sampleRateHz, channels)
 
     override fun close() {
         runCatching { if (out != null) out!!.write(message(1, 0x005, ByteArray(0))) } // Terminate
@@ -195,7 +176,35 @@ class UvoxClient(
     companion object {
         private const val HANDSHAKE_TIMEOUT_MS = 6_000
         private val NULL_CHAR = 0.toChar() // ASCIIZ terminator used in Ultravox payloads
-        private const val AAC_LC_PROFILE = 1 // ADTS profile = objectType(2 for AAC-LC) - 1
+        // ADTS profile field = AAC-LC base layer; carries HE-AAC backward-compatibly (see wrapAdts).
+        private const val AAC_LC_PROFILE = 1
+
+        /**
+         * Pure: build a 7-byte (no-CRC) ADTS header for one AAC access unit. Profile field =
+         * AAC-LC base layer (carries HE-AAC backward-compatibly — implicit SBR). Channel
+         * configuration's low 2 bits live in byte 3 bits 7-6 (NOT 5-4); a wrong shift decodes
+         * as channel_configuration = 0 and the stream is unplayable. Pure → unit tested.
+         */
+        fun adtsHeader(au: ByteArray, sampleRateHz: Int, channels: Int): ByteArray {
+            val freqIdx = adtsFreqIndex(sampleRateHz)
+            val frameLen = au.size + 7
+            val out = ByteArray(7 + au.size)
+            out[0] = 0xFF.toByte()
+            out[1] = 0xF1.toByte() // MPEG-4, layer 0, protection_absent (no CRC)
+            out[2] = (((AAC_LC_PROFILE and 0x3) shl 6) or (freqIdx shl 2) or (channels ushr 2)).toByte()
+            out[3] = (((channels and 0x3) shl 6) or ((frameLen ushr 11) and 0x3)).toByte()
+            out[4] = ((frameLen ushr 3) and 0xFF).toByte()
+            out[5] = (((frameLen and 0x7) shl 5) or 0x1F).toByte()
+            out[6] = 0xFC.toByte()
+            System.arraycopy(au, 0, out, 7, au.size)
+            return out
+        }
+
+        private fun adtsFreqIndex(sr: Int): Int = when (sr) {
+            96_000 -> 0; 88_200 -> 1; 64_000 -> 2; 48_000 -> 3; 44_100 -> 4
+            32_000 -> 5; 24_000 -> 6; 22_050 -> 7; 16_000 -> 8; 12_000 -> 9
+            11_025 -> 10; 8_000 -> 11; 7_350 -> 12; else -> 4
+        }
 
         /** Pure: build a full Ultravox wire message (header + payload + 0x00 trailer). */
         fun message(cls: Int, type: Int, payload: ByteArray): ByteArray {

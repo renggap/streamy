@@ -11,11 +11,17 @@ import androidx.core.content.ContextCompat
  */
 object ServiceController {
 
-    /** Component-explicit [Intent] + [ContextCompat.startForegroundService]. */
-    fun start(context: Context, profileId: Long) {
+    /**
+     * Component-explicit [Intent] + [ContextCompat.startForegroundService].
+     * [deviceName] is the user-selected input device's productName (or null for default);
+     * passed via Intent — NOT SharedPreferences — so an immediate start after selection can't
+     * lose to an in-flight apply().
+     */
+    fun start(context: Context, profileId: Long, deviceName: String? = null) {
         val intent = Intent(context, StreamService::class.java).apply {
             action = StreamService.ACTION_START
             putExtra(StreamService.EXTRA_PROFILE_ID, profileId)
+            deviceName?.let { putExtra(StreamService.EXTRA_DEVICE_NAME, it) }
         }
         ContextCompat.startForegroundService(context, intent)
     }
@@ -36,6 +42,14 @@ object ServiceController {
         val intent = Intent(context, StreamService::class.java).apply {
             action = StreamService.ACTION_META
             putExtra(StreamService.EXTRA_TITLE, title)
+        }
+        context.startService(intent)
+    }
+
+    /** Toggle local MP3 recording on the running (Live) stream. No-op if not Live. */
+    fun setRecording(context: Context, on: Boolean) {
+        val intent = Intent(context, StreamService::class.java).apply {
+            action = if (on) StreamService.ACTION_RECORD_ON else StreamService.ACTION_RECORD_OFF
         }
         context.startService(intent)
     }

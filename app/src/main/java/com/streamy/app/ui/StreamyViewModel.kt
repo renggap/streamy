@@ -1,6 +1,9 @@
 package com.streamy.app.ui
 
 import android.app.Application
+import android.content.Context
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
@@ -13,6 +16,7 @@ import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.data.ProfileRepository
 import com.streamy.app.service.ServiceController
 import com.streamy.app.service.StreamState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,12 +34,14 @@ import kotlinx.coroutines.launch
  * the same profile row via Room at start time, so chooser changes take effect on the next
  * start (the [needsRestartToApply] flow surfaces that when Live).
  *
- * When no profile is selected, the derived flows fall back to speech-friendly defaults
- * (MP3 · 128 · 44.1 kHz · mono); HomeScreen disables the chooser in that case.
+ * Mic settings (software gain + selected input device NAME) live in SharedPreferences
+ * (`streamy_mic`), NOT on the profile — they apply to every stream. Gain is pushed live to
+ * the bound service via [ServiceController]/binder; the device name rides the START intent
+ * (an apply() on the slider path can't race an intent).
  *
  * State discipline: VM owns source-of-truth; screens pull state in + emit events out.
- * The bound [StreamService.state] is pushed in from [MainActivity]'s ServiceConnection
- * via [onServiceStateChanged] — the VM never owns the binding.
+ * The bound [StreamService.state] / levels / recording flags are pushed in from
+ * [MainActivity]'s ServiceConnection via the on*() mirrors — the VM never owns the binding.
  *
  * ponytail: persist selectedProfileId across process death (DataStore). Out of scope 12b.
  */
@@ -47,6 +53,9 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     ).addMigrations(AppDatabase.MIGRATION_1_2).build()
 
     private val repo = ProfileRepository(db.profileDao())
+
+    // Mic prefs (gain + input device name) — shared with nothing; service gets device via Intent.
+    private val prefs = app.getSharedPreferences("streamy_mic", Context.MODE_PRIVATE)
 
     // ---- Streams from storage / service ----
 
@@ -65,9 +74,15 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     private val _streamState = MutableStateFlow<StreamState>(StreamState.Idle)
     val streamState: StateFlow<StreamState> = _streamState.asStateFlow()
 
-    // Mirror of StreamService.levels, pushed from MainActivity's second collector. Null when idle.
+    // Mirror of StreamService.levels, pushed from MainActivity. Null when idle.
     private val _levels = MutableStateFlow<LevelSnapshot?>(null)
     val levels: StateFlow<LevelSnapshot?> = _levels.asStateFlow()
+
+    // Mirror of StreamService recording flags, pushed from MainActivity.
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+    private val _recordingPath = MutableStateFlow<String?>(null)
+    val recordingPath: StateFlow<String?> = _recordingPath.asStateFlow()
 
     /**
      * Snapshot of the selected profile captured at the moment [start] was last invoked.
@@ -76,6 +91,27 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
      * to drive [needsRestartToApply].
      */
     private val _startSnapshot = MutableStateFlow<ProfileEntity?>(null)
+
+    // ---- Mic settings (gain + device) ----
+
+    /** Linear mic gain, 0..2 (1.0 = unity). Seeded from prefs so it survives process death. */
+    private val _micGain = MutableStateFlow(1.0f).also {
+        it.value = runCatching { prefs.getFloat(KEY_GAIN, 1.0f) }.getOrDefault(1.0f)
+    }
+    val micGain: StateFlow<Float> = _micGain.asStateFlow()
+
+    /** Selected input device productName (null = system default). Seeded from prefs. */
+    private val _selectedDeviceName = MutableStateFlow<String?>(null).also {
+        it.value = prefs.getString(KEY_DEVICE, null)?.takeIf { s -> s.isNotBlank() }
+    }
+    val selectedDeviceName: StateFlow<String?> = _selectedDeviceName.asStateFlow()
+
+    /** Input device captured at start, to detect mid-stream mic swaps ([needsRestartToApply]). */
+    private val _startDeviceName = MutableStateFlow<String?>(null)
+
+    /** Enumerated input devices, refreshed off-main by [refreshInputDevices]. */
+    private val _inputDevices = MutableStateFlow<List<MicDevice>>(emptyList())
+    val inputDevices: StateFlow<List<MicDevice>> = _inputDevices.asStateFlow()
 
     // ---- Audio settings: derived from the selected profile ----
     //
@@ -109,13 +145,13 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     /**
-     * True when audio settings on the selected profile diverge from the snapshot the
-     * running stream was started with. The VM does NOT auto-restart — surfacing this hint
-     * is enough; user stops + starts to apply.
+     * True when audio settings on the selected profile OR the selected mic diverge from the
+     * snapshot the running stream was started with. The VM does NOT auto-restart — surfacing
+     * this hint is enough; user stops + starts to apply.
      */
     val needsRestartToApply: StateFlow<Boolean> = combine(
-        streamState, selectedProfile, _startSnapshot,
-    ) { state, profile, snapshot ->
+        streamState, selectedProfile, _startSnapshot, selectedDeviceName, _startDeviceName,
+    ) { state, profile, snapshot, dev, startDev ->
         state is StreamState.Live &&
             snapshot != null &&
             profile != null &&
@@ -123,7 +159,8 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
                 snapshot.codec != profile.codec ||
                     snapshot.bitrateKbps != profile.bitrateKbps ||
                     snapshot.sampleRateHz != profile.sampleRateHz ||
-                    snapshot.mono != profile.mono
+                    snapshot.mono != profile.mono ||
+                    dev != startDev
             )
     }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
@@ -145,6 +182,31 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun selectProfile(id: Long?) {
         _selectedProfileId.value = id
+    }
+
+    // ---- Mic settings ----
+
+    /** Set software mic gain; UI updates instantly, prefs persist async (apply, never commit). */
+    fun setMicGain(g: Float) {
+        _micGain.value = g
+        viewModelScope.launch { prefs.edit().putFloat(KEY_GAIN, g).apply() }
+    }
+
+    fun setInputDevice(name: String?) {
+        _selectedDeviceName.value = name?.takeIf { it.isNotBlank() }
+        viewModelScope.launch { prefs.edit().putString(KEY_DEVICE, _selectedDeviceName.value).apply() }
+    }
+
+    /** Enumerate input mics off-main. Idempotent; safe to call on Settings open / resume. */
+    fun refreshInputDevices() {
+        val am = getApplication<Application>().getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        viewModelScope.launch(Dispatchers.IO) {
+            val list = am.getDevices(AudioManager.GET_DEVICES_INPUTS)
+                .filter { it.isSource && it.type in ALLOWED_INPUT_TYPES }
+                .map { MicDevice(it.productName?.toString().orEmpty().ifEmpty { "(unnamed)" }, it.type) }
+                .distinctBy { it.name }
+            _inputDevices.value = list
+        }
     }
 
     // ---- Audio setters: tune the selected profile in place ----
@@ -226,7 +288,7 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun consumeMessage() { _userMessage.value = null }
 
-    // ---- Lifecycle: start / stop ----
+    // ---- Lifecycle: start / stop / record ----
 
     fun start() {
         val ctx = getApplication<Application>()
@@ -235,22 +297,31 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
             _userMessage.value = "No profile selected"
             return
         }
-        // AAC now streams via the Ultravox 2.1 source client (UvoxClient) in StreamService —
-        // DNAS2 reports it as audio/aacp. MP3 rides the v1 source client. No codec guard needed.
         val needed = missingPermissions(ctx)
         if (needed.isNotEmpty()) {
             pendingStartProfileId = profileId
             _permissionsNeeded.value = needed
             return
         }
-        // Capture the profile snapshot the stream is being started against, so we can
-        // detect later divergence while Live (chooser tuning the profile mid-stream).
+        // Capture the profile + mic-device snapshot the stream is being started against, so we
+        // can detect later divergence while Live.
         _startSnapshot.value = selectedProfile.value
-        ServiceController.start(ctx, profileId)
+        _startDeviceName.value = _selectedDeviceName.value
+        ServiceController.start(ctx, profileId, _selectedDeviceName.value)
     }
 
     fun stop() {
         ServiceController.stop(getApplication())
+    }
+
+    /** Toggle local MP3 recording on the running stream. No-op unless Live. */
+    fun toggleRecording() {
+        val state = streamState.value
+        if (state !is StreamState.Live) {
+            _userMessage.value = "Start streaming first"
+            return
+        }
+        ServiceController.setRecording(getApplication(), !_isRecording.value)
     }
 
     /**
@@ -273,7 +344,8 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         if (id == null) return
         if (results.values.all { it }) {
             _startSnapshot.value = selectedProfile.value
-            ServiceController.start(getApplication(), id)
+            _startDeviceName.value = _selectedDeviceName.value
+            ServiceController.start(getApplication(), id, _selectedDeviceName.value)
         } else {
             _userMessage.value = "Microphone permission required to broadcast"
         }
@@ -284,9 +356,15 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         _streamState.value = state
     }
 
-    /** ServiceConnection pushes the bound service's level snapshots in here. */
+    /** ServiceConnection pushes the service's level snapshots in here. */
     fun onLevels(snapshot: LevelSnapshot?) {
         _levels.value = snapshot
+    }
+
+    /** ServiceConnection pushes the service's recording flags in here. */
+    fun onRecording(isRecording: Boolean, path: String?) {
+        _isRecording.value = isRecording
+        if (path != null) _recordingPath.value = path
     }
 
     private fun missingPermissions(context: android.content.Context): List<String> {
@@ -309,4 +387,21 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         // Close the VM-side Room handle so the SQLiteDatabase isn't left open after the VM dies.
         runCatching { db.close() }
     }
+
+    companion object {
+        private const val KEY_GAIN = "gain"
+        private const val KEY_DEVICE = "input_device_name"
+
+        /** Input device types exposed in the selector (built-in, wired, USB, BT). */
+        private val ALLOWED_INPUT_TYPES = setOf(
+            AudioDeviceInfo.TYPE_BUILTIN_MIC,
+            AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            AudioDeviceInfo.TYPE_USB_DEVICE,
+            AudioDeviceInfo.TYPE_USB_HEADSET,
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+        )
+    }
 }
+
+/** UI-side view of an input [AudioDeviceInfo] — keeps the framework type out of Compose. */
+data class MicDevice(val name: String, val type: Int)

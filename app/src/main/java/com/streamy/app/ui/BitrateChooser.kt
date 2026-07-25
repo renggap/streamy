@@ -88,12 +88,11 @@ fun BitrateChooser(
                 activeContent = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            // AAC temporarily disabled in the UI — keep the encoder + UvoxClient AAC code for
-            // when it's revisited. Pill is greyed/non-selectable; MP3 remains the active path.
+            // AAC streams as HE-AAC over Ultravox (audio/aacp, data msg 0x8003) — see AacEncoder.
             TogglePill(
                 label = "AAC",
                 active = codec == Codec.AAC,
-                enabled = false,
+                enabled = enabled,
                 onClick = { onCodec(Codec.AAC) },
                 activeContainer = MaterialTheme.colorScheme.surfaceVariant,
                 activeContent = MaterialTheme.colorScheme.onSurfaceVariant,
