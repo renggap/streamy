@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [ProfileEntity::class], version = 2, exportSchema = false)
+@Database(entities = [ProfileEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
 
@@ -19,6 +19,18 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE profiles ADD COLUMN adminUser TEXT")
                 db.execSQL("ALTER TABLE profiles ADD COLUMN adminPassword TEXT")
+            }
+        }
+
+        /**
+         * v2 → v3: add DJ-mode (sc_trans) fields. All nullable/defaulted so existing SOURCE
+         * rows upgrade as SOURCE with no DJ credentials — nothing changes for current users.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE profiles ADD COLUMN mode TEXT NOT NULL DEFAULT 'SOURCE'")
+                db.execSQL("ALTER TABLE profiles ADD COLUMN djUser TEXT")
+                db.execSQL("ALTER TABLE profiles ADD COLUMN djPort INTEGER")
             }
         }
     }

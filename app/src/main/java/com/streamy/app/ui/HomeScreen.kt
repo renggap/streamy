@@ -109,6 +109,15 @@ fun HomeScreen(
                 onStop = vm::stop,
             )
 
+            if (hasProfile) {
+                NowPlayingSection(
+                    text = nowPlaying,
+                    onTextChange = { nowPlaying = it },
+                    isLive = isLive,
+                    onUpdate = { vm.updateNowPlaying(nowPlaying) },
+                )
+            }
+
             VuMeter(snapshot = levels)
 
             MicVolumeSlider(gain = micGain, onChange = vm::setMicGain)
@@ -124,15 +133,6 @@ fun HomeScreen(
                 Hint(
                     "Settings changed — stop and restart to apply",
                     tone = HintTone.Warn,
-                )
-            }
-
-            if (hasProfile) {
-                NowPlayingSection(
-                    text = nowPlaying,
-                    onTextChange = { nowPlaying = it },
-                    isLive = isLive,
-                    onUpdate = { vm.updateNowPlaying(nowPlaying) },
                 )
             }
 

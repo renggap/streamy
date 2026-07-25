@@ -68,6 +68,7 @@ fun BitrateChooser(
     onSampleRate: (Int) -> Unit,
     onMono: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    allowAac: Boolean = true,   // DJ mode (sc_trans) = MP3 feed only for v1
 ) {
     val heAac = AudioConfigRules.needsHeAac(codec, bitrate)
     val bitrates = if (codec == Codec.AAC) AudioConfigRules.AAC_BITRATES else AudioConfigRules.MP3_BITRATES
@@ -89,10 +90,11 @@ fun BitrateChooser(
                 modifier = Modifier.weight(1f),
             )
             // AAC streams as HE-AAC over Ultravox (audio/aacp, data msg 0x8003) — see AacEncoder.
+            // Disabled when allowAac=false (DJ v1 = MP3 feed; sc_trans AAC acceptance unverified).
             TogglePill(
                 label = "AAC",
                 active = codec == Codec.AAC,
-                enabled = enabled,
+                enabled = enabled && allowAac,
                 onClick = { onCodec(Codec.AAC) },
                 activeContainer = MaterialTheme.colorScheme.surfaceVariant,
                 activeContent = MaterialTheme.colorScheme.onSurfaceVariant,

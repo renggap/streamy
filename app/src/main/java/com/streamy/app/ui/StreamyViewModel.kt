@@ -50,19 +50,24 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     // Same db name as StreamService so profile writes are visible without a sync layer.
     private val db: AppDatabase = Room.databaseBuilder(
         app, AppDatabase::class.java, "streamy.db",
-    ).addMigrations(AppDatabase.MIGRATION_1_2).build()
+    ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3).build()
 
     private val repo = ProfileRepository(db.profileDao())
 
     // Mic prefs (gain + input device name) — shared with nothing; service gets device via Intent.
     private val prefs = app.getSharedPreferences("streamy_mic", Context.MODE_PRIVATE)
 
+    // UI prefs — last selected profile id survives process death.
+    private val uiPrefs = app.getSharedPreferences("streamy_ui", Context.MODE_PRIVATE)
+
     // ---- Streams from storage / service ----
 
     val profiles: StateFlow<List<ProfileEntity>> = repo.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _selectedProfileId = MutableStateFlow<Long?>(null)
+    private val _selectedProfileId = MutableStateFlow(
+        uiPrefs.getLong(KEY_SELECTED_PROFILE, -1L).takeIf { it >= 0L }
+    )
     val selectedProfileId: StateFlow<Long?> = _selectedProfileId.asStateFlow()
 
     val selectedProfile: StateFlow<ProfileEntity?> = combine(
@@ -165,6 +170,27 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    init {
+        // Persist selection (single source of truth — every setter flows through here).
+        viewModelScope.launch {
+            _selectedProfileId.collect { id ->
+                uiPrefs.edit().apply {
+                    if (id != null) putLong(KEY_SELECTED_PROFILE, id) else remove(KEY_SELECTED_PROFILE)
+                }.apply()
+            }
+        }
+        // Self-heal: if the persisted id references a profile that no longer exists once Room
+        // loads, drop it so a stale id can't trip a "profile_missing" start.
+        viewModelScope.launch {
+            profiles.collect { list ->
+                val id = _selectedProfileId.value
+                if (id != null && list.isNotEmpty() && list.none { it.id == id }) {
+                    _selectedProfileId.value = null
+                }
+            }
+        }
+    }
+
     // ---- Transient UI signals ----
 
     private val _userMessage = MutableStateFlow<String?>(null)
@@ -203,7 +229,7 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             val list = am.getDevices(AudioManager.GET_DEVICES_INPUTS)
                 .filter { it.isSource && it.type in ALLOWED_INPUT_TYPES }
-                .map { MicDevice(it.productName?.toString().orEmpty().ifEmpty { "(unnamed)" }, it.type) }
+                .map { MicDevice(it.productName?.toString().orEmpty().ifEmpty { "(unnamed)" }, labelFor(it), it.type) }
                 .distinctBy { it.name }
             _inputDevices.value = list
         }
@@ -391,17 +417,49 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     companion object {
         private const val KEY_GAIN = "gain"
         private const val KEY_DEVICE = "input_device_name"
+        private const val KEY_SELECTED_PROFILE = "selected_profile_id"
 
-        /** Input device types exposed in the selector (built-in, wired, USB, BT). */
+        /** Input device types exposed in the selector (built-in, wired, USB, BT classic + LE). */
         private val ALLOWED_INPUT_TYPES = setOf(
             AudioDeviceInfo.TYPE_BUILTIN_MIC,
             AudioDeviceInfo.TYPE_WIRED_HEADSET,
             AudioDeviceInfo.TYPE_USB_DEVICE,
             AudioDeviceInfo.TYPE_USB_HEADSET,
             AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+            AudioDeviceInfo.TYPE_BLE_HEADSET,
         )
+
+        /**
+         * Human-readable label: trust productName when it's a real device name, else derive from
+         * type. There is no AudioDeviceInfo.getName(); getProductName() returns Build.MODEL when the
+         * port has no real name (typical for TYPE_BUILTIN_MIC) — that's the unreadable string users
+         * saw. Detect that substitution and fall back to a type-derived label.
+         */
+        private fun labelFor(dev: AudioDeviceInfo): String {
+            val raw = dev.productName?.toString()?.trim().orEmpty()
+            val plausible = raw.isNotEmpty() &&
+                raw != android.os.Build.MODEL &&
+                raw != android.os.Build.DEVICE &&
+                raw != android.os.Build.PRODUCT
+            return if (plausible) raw else typeLabel(dev.type)
+        }
+
+        private fun typeLabel(type: Int): String = when (type) {
+            AudioDeviceInfo.TYPE_BUILTIN_MIC -> "Built-in microphone"
+            AudioDeviceInfo.TYPE_USB_DEVICE,
+            AudioDeviceInfo.TYPE_USB_HEADSET -> "USB microphone"
+            AudioDeviceInfo.TYPE_WIRED_HEADSET -> "Wired headset"
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+            AudioDeviceInfo.TYPE_BLE_HEADSET -> "Bluetooth headset"
+            else -> "Microphone"
+        }
     }
 }
 
-/** UI-side view of an input [AudioDeviceInfo] — keeps the framework type out of Compose. */
-data class MicDevice(val name: String, val type: Int)
+/**
+ * UI-side view of an input [AudioDeviceInfo] — keeps the framework type out of Compose.
+ * [name] is the raw productName (the round-trip key StreamService matches against); [label] is
+ * the human-readable string the dropdown renders. They differ because [AudioDeviceInfo.getProductName]
+ * returns Build.MODEL (unreadable) when the port has no real name — see [labelFor].
+ */
+data class MicDevice(val name: String, val label: String, val type: Int)

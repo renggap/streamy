@@ -2,6 +2,13 @@ package com.streamy.app.data
 
 enum class Codec { AAC, MP3 }
 
+/**
+ * Broadcast mode. SOURCE = push encoded audio to DNAS2 (sc_serv) — Streamy IS the source.
+ * DJ = push encoded audio to sc_trans (the Transcoder) on its djport2 — sc_trans re-encodes and
+ * is the real DNAS source. The wire delta is one Ultravox auth field (djlogin in the 0x1001 UID).
+ */
+enum class BroadcastMode { SOURCE, DJ }
+
 /** Bitrate + sample-rate + channels resolved for an encode session. */
 data class AudioConfig(
     val codec: Codec,
@@ -13,7 +20,7 @@ data class AudioConfig(
 /** Validates a chosen AudioConfig against codec rules. Throws on impossible combos. */
 object AudioConfigRules {
     val AAC_BITRATES = listOf(16, 24, 32, 48, 64, 96, 128)
-    val MP3_BITRATES = listOf(16, 24, 48, 64, 96, 128, 192)
+    val MP3_BITRATES = listOf(16, 24, 32, 48, 64, 96, 128, 192)
     val SAMPLE_RATES = listOf(16000, 22050, 44100, 48000)
     /** MP3 at 16/24 kbps needs MPEG-2 Layer III (sample rate ≤ 24 kHz); LAME bumps to 32 otherwise. */
     val MPEG2_SAMPLE_RATES = listOf(16000, 22050)

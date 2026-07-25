@@ -1,7 +1,9 @@
 package com.streamy.app.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
@@ -18,7 +20,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -71,24 +75,24 @@ fun StreamyNavigation(
     val currentRoute = navStackEntry?.destination?.route
     val showBar = currentRoute in TOP_DESTINATIONS.map { it.route }.toSet()
 
-    // One SnackbarHost at the nav level so vm.userMessage surfaces on every tab — Home used to
-    // own the only host, so messages emitted from Settings/EditProfile (save/delete) were lost.
+    // One SnackbarHost at the nav level so vm.userMessage surfaces on every tab. Overlaid at the
+    // TOP (status-bar-aware) — a bottom snackbar sat under the keyboard / nav bar and was invisible
+    // after actions like song-title update, which fire while the user's eyes are on the field.
     val snackbarHostState = remember { SnackbarHostState() }
     val message by vm.userMessage.collectAsStateWithLifecycle()
     LaunchedEffect(message) {
         message?.let { snackbarHostState.showSnackbar(it); vm.consumeMessage() }
     }
 
-    Scaffold(
-        modifier = modifier,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        bottomBar = { if (showBar) StreamyBottomBar(nav, currentRoute) },
-    ) { innerPadding ->
-        NavHost(
-            navController = nav,
-            startDestination = Routes.HOME,
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-        ) {
+    Box(modifier) {
+        Scaffold(
+            bottomBar = { if (showBar) StreamyBottomBar(nav, currentRoute) },
+        ) { innerPadding ->
+            NavHost(
+                navController = nav,
+                startDestination = Routes.HOME,
+                modifier = Modifier.fillMaxSize().padding(innerPadding),
+            ) {
             composable(Routes.HOME) {
                 HomeScreen(
                     vm = vm,
@@ -123,6 +127,14 @@ fun StreamyNavigation(
                 )
             }
         }
+        }
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 8.dp),
+        ) { data -> Snackbar(snackbarData = data) }
     }
 }
 

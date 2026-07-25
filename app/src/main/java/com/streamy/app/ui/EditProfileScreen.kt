@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.streamy.app.data.AudioConfig
 import com.streamy.app.data.AudioConfigRules
+import com.streamy.app.data.BroadcastMode
 import com.streamy.app.data.Codec
 import com.streamy.app.data.db.ProfileEntity
 
@@ -71,6 +73,8 @@ fun EditProfileScreen(
     var sid by remember(profileId) { mutableStateOf("1") }
     var password by remember(profileId) { mutableStateOf("") }
     var mount by remember(profileId) { mutableStateOf("/stream") }
+    var mode by remember(profileId) { mutableStateOf(BroadcastMode.SOURCE) }
+    var djUser by remember(profileId) { mutableStateOf("") }
     var codec by remember(profileId) { mutableStateOf(Codec.MP3) }
     var bitrate by remember(profileId) { mutableStateOf(128) }
     var sampleRate by remember(profileId) { mutableStateOf(44_100) }
@@ -93,6 +97,9 @@ fun EditProfileScreen(
                 sid = p.sid.toString()
                 password = p.password
                 mount = p.mount
+                mode = runCatching { BroadcastMode.valueOf(p.mode.trim().uppercase()) }
+                    .getOrDefault(BroadcastMode.SOURCE)
+                djUser = p.djUser.orEmpty()
                 codec = runCatching { Codec.valueOf(p.codec.trim().uppercase()) }
                     .getOrDefault(Codec.MP3)
                 bitrate = p.bitrateKbps
@@ -103,13 +110,15 @@ fun EditProfileScreen(
         }
     }
 
+    val isDj = mode == BroadcastMode.DJ
     val nameErr = name.isBlank()
     val hostErr = host.isBlank()
     val portErr = port.toIntOrNull()?.let { it <= 0 || it > 65_535 } ?: true
     val sidErr = sid.toIntOrNull()?.let { it <= 0 } ?: true
     val passwordErr = password.isBlank()
-    val mountErr = mount.isBlank()
-    val formValid = !nameErr && !hostErr && !portErr && !sidErr && !passwordErr && !mountErr &&
+    val mountErr = !isDj && mount.isBlank()        // mount is a DNAS concept; hidden in DJ mode
+    val djUserErr = isDj && djUser.isBlank()       // sc_trans djlogin goes in the auth UID field
+    val formValid = !nameErr && !hostErr && !portErr && !sidErr && !passwordErr && !mountErr && !djUserErr &&
         bitrate in (if (codec == Codec.AAC) AudioConfigRules.AAC_BITRATES else AudioConfigRules.MP3_BITRATES) &&
         sampleRate in AudioConfigRules.SAMPLE_RATES
 
@@ -128,12 +137,51 @@ fun EditProfileScreen(
     ) {
         ScreenHeader(
             title = if (isNew) "NEW PROFILE" else "EDIT PROFILE",
-            subtitle = if (isNew) "SHOUTcast v2 / Icecast"
+            subtitle = if (isNew) "SHOUTcast v2"
             else name.ifBlank { "Editing" },
             onBack = onBack,
         )
 
         FieldGroup("SERVER") {
+            // MODE: SOURCE pushes to DNAS (Streamy is the source); DJ pushes to sc_trans djport2
+            // (sc_trans re-encodes the feed). DJ v1 = MP3 (sc_trans AAC acceptance unverified).
+            Text(
+                "MODE",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(BroadcastMode.SOURCE to "SOURCE", BroadcastMode.DJ to "DJ").forEach { (m, label) ->
+                    Button(
+                        onClick = {
+                            mode = m
+                            if (m == BroadcastMode.DJ && codec == Codec.AAC) codec = Codec.MP3
+                        },
+                        shape = RoundedCornerShape(4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (mode == m) MaterialTheme.colorScheme.surfaceVariant
+                            else MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                        contentPadding = PaddingValues(vertical = 12.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = if (mode == m) FontWeight.Black else FontWeight.Medium,
+                        )
+                    }
+                }
+            }
+            if (isDj) {
+                Text(
+                    "DJ mode: Streamy feeds sc_trans, which re-encodes to its own config. " +
+                        "Codec/bitrate below are uplink-only.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
             LabeledTextField(
                 label = "Name",
                 value = name,
@@ -151,10 +199,10 @@ fun EditProfileScreen(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 LabeledTextField(
-                    label = "Port",
+                    label = if (isDj) "DJ port" else "Port",
                     value = port,
                     onValueChange = { port = it.filter(Char::isDigit).take(5) },
-                    placeholder = "8000",
+                    placeholder = if (isDj) "8505" else "8000",
                     error = if (portErr) "1–65535" else null,
                     keyboardType = KeyboardType.Number,
                     modifier = Modifier.weight(1f),
@@ -169,11 +217,20 @@ fun EditProfileScreen(
                     modifier = Modifier.weight(1f),
                 )
             }
+            if (isDj) {
+                LabeledTextField(
+                    label = "DJ user",
+                    value = djUser,
+                    onValueChange = { djUser = it },
+                    placeholder = "djlogin",
+                    error = if (djUserErr) "Required" else null,
+                )
+            }
             LabeledTextField(
-                label = "Password",
+                label = if (isDj) "DJ password" else "Password",
                 value = password,
                 onValueChange = { password = it },
-                placeholder = "source password",
+                placeholder = if (isDj) "djpassword" else "source password",
                 error = if (passwordErr) "Required" else null,
                 keyboardType = KeyboardType.Password,
                 visualTransformation = if (showPassword) VisualTransformation.None
@@ -187,14 +244,16 @@ fun EditProfileScreen(
                     }
                 },
             )
-            LabeledTextField(
-                label = "Mount",
-                value = mount,
-                onValueChange = { mount = it },
-                placeholder = "/stream",
-                error = if (mountErr) "Required" else null,
-                keyboardType = KeyboardType.Uri,
-            )
+            if (!isDj) {
+                LabeledTextField(
+                    label = "Mount",
+                    value = mount,
+                    onValueChange = { mount = it },
+                    placeholder = "/stream",
+                    error = if (mountErr) "Required" else null,
+                    keyboardType = KeyboardType.Uri,
+                )
+            }
         }
 
         FieldGroup("AUDIO") {
@@ -223,6 +282,7 @@ fun EditProfileScreen(
                 onMono = { b ->
                     if (!AudioConfigRules.needsHeAac(codec, bitrate) || b) mono = b
                 },
+                allowAac = !isDj,
             )
         }
 
@@ -257,6 +317,8 @@ fun EditProfileScreen(
                         mono = mono,
                         // adminUser/adminPassword left default (null): in-stream metadata
                         // now flows through Ultravox 0x902 — no admin creds needed.
+                        mode = mode.name,
+                        djUser = if (isDj) djUser.trim() else null,
                     )
                     vm.saveProfile(entity) { onBack() }
                 },

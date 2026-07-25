@@ -38,6 +38,7 @@ import com.streamy.app.net.SourceClient
 import com.streamy.app.net.StreamTransport
 import com.streamy.app.net.TransportState
 import com.streamy.app.net.UvoxClient
+import com.streamy.app.storage.RecordingStorage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,8 +47,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.io.File
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -86,7 +85,7 @@ class StreamService : Service() {
 
     private val db by lazy {
         Room.databaseBuilder(this, AppDatabase::class.java, "streamy.db")
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             .build()
     }
 
@@ -171,15 +170,19 @@ class StreamService : Service() {
                 // (no socket yet — connect() runs later from the transport coroutine).
                 val enc = EncoderFactory.create(cfg)
 
-                // Ultravox 2.1 source client for BOTH codecs: AAC rides audio/aacp (0x8003),
-                // MP3 rides audio/mpeg (0x7000) — live-verified stable on DNAS2 2.6.1.
-                // Unifying on UvoxClient also gives MP3 in-stream metadata (0x902) for free.
+                // Ultravox 2.1 client for BOTH codecs AND both modes: AAC rides audio/aacp
+                // (0x8003), MP3 rides audio/mpeg (0x7000). SOURCE talks to DNAS; DJ talks to
+                // sc_trans's djport2 with djlogin in the auth UID — sc_trans re-encodes the feed.
+                val isDj = profile.mode.equals("DJ", ignoreCase = true)
                 val source: SourceClient = UvoxClient(
-                    host = profile.host, port = profile.port, sid = profile.sid,
+                    host = profile.host,
+                    port = if (isDj) (profile.djPort ?: profile.port) else profile.port,
+                    sid = profile.sid,
                     password = profile.password,
                     mime = if (cfg.codec == Codec.AAC) "audio/aacp" else "audio/mpeg",
                     sampleRateHz = cfg.sampleRateHz,
                     channels = if (cfg.mono) 1 else 2,
+                    djUser = if (isDj) profile.djUser else null,
                 )
 
                 // Resolve the user-selected input device by NAME for THIS session (ids are not
@@ -257,15 +260,14 @@ class StreamService : Service() {
         val cfg = liveCfg ?: run { _isRecording.value = false; return }
         scope.launch(Dispatchers.IO) {
             val built: StreamSink? = try {
-                val base = getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC) ?: null
-                if (base == null) null else {
-                    val dir = File(base, "Streamy").apply { mkdirs() }
-                    val file = File(dir, "streamy-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}.mp3")
+                val name = "streamy-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}.mp3"
+                val target = RecordingStorage.open(this@StreamService, name)
+                if (target == null) null else {
                     // MP3 stream → write frames as-is (zero re-encode). AAC stream → transcode via LAME.
                     val sink: StreamSink = if (cfg.codec == Codec.MP3)
-                        Mp3DirectSink(FileOutputStream(file))
-                    else Mp3TranscodeSink(FileOutputStream(file), cfg.sampleRateHz, cfg.mono)
-                    _recordingPath.value = file.absolutePath
+                        Mp3DirectSink(target.stream)
+                    else Mp3TranscodeSink(target.stream, cfg.sampleRateHz, cfg.mono)
+                    _recordingPath.value = target.displayPath
                     sink
                 }
             } catch (e: Throwable) {

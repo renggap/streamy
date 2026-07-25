@@ -30,6 +30,12 @@ class UvoxClient(
     private val mime: String, // "audio/mpeg" or "audio/aacp"
     private val sampleRateHz: Int = 44_100, // used for AAC ADTS framing
     private val channels: Int = 1,          // 1 = mono, 2 = stereo (AAC ADTS channel config)
+    /**
+     * DJ mode (sc_trans): when non-null, this is the sc_trans `djlogin` and goes into the 0x1001
+     * auth UID field (XTEA-enciphered), and [password] is the `djpassword`. Null = SOURCE mode
+     * (DNAS), UID field blank. The only wire difference between SOURCE and DJ — see [connect].
+     */
+    private val djUser: String? = null,
 ) : SourceClient {
 
     private val dataClass: Int
@@ -66,8 +72,11 @@ class UvoxClient(
             val cipherKey = cipherResp.substringAfter("ACK:").trimEnd(NULL_CHAR)
                 .toByteArray(Charsets.US_ASCII)
 
-            // 2) Authenticate: UID empty, AuthBlob = password, both XTEA-enciphered.
-            val encUid = UvoxXtea.encipher(ByteArray(0), cipherKey)
+            // 2) Authenticate: UID = djlogin (DJ mode) or blank (SOURCE); AuthBlob = password
+            //    (stream password for SOURCE, djpassword for DJ). Both XTEA-enciphered, hex-emitted.
+            val encUid = UvoxXtea.encipher(
+                (djUser ?: "").toByteArray(Charsets.US_ASCII), cipherKey
+            )
             val encBlob = UvoxXtea.encipher(password.toByteArray(Charsets.US_ASCII), cipherKey)
             val authResp = request(1, 0x001, "2.1:$sid:$encUid:$encBlob")
             if (!authResp.startsWith("ACK")) throw ProtocolException("auth NAK: $authResp")
@@ -108,8 +117,14 @@ class UvoxClient(
         o.flush()
     }
 
-    /** Build a 7-byte (no-CRC) ADTS header around one AAC access unit — see [adtsHeader]. */
-    private fun wrapAdts(au: ByteArray): ByteArray = adtsHeader(au, sampleRateHz, channels)
+    /** Wrap one AU in an ADTS header — see [UvoxClient.adtsHeader].
+     *
+     *  HE-AAC v1 (used for ALL AAC bitrates — see AacEncoder) carries SBR implicitly, so the ADTS
+     *  header MUST declare the AAC-LC CORE rate (sampleRateHz / 2), NOT the SBR-doubled output
+     *  rate. DNAS2 derives stream BITRATE from ADTS sample_rate / 1024 × frame_count (libshout_aac);
+     *  declaring the output rate doubles the computed frame rate and DNAS reports 2× the configured
+     *  bitrate (e.g. 48 kbps for a 24 kbps stream). Refs: ISO/IEC 14496-3 §1.6.5.2; wiki.multimedia.cx/ADTS. */
+    private fun wrapAdts(au: ByteArray): ByteArray = adtsHeader(au, sampleRateHz / 2, channels)
 
     override fun close() {
         runCatching { if (out != null) out!!.write(message(1, 0x005, ByteArray(0))) } // Terminate

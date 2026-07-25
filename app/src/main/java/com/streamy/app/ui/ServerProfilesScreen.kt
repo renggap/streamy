@@ -220,7 +220,8 @@ private fun ProfileRow(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                "${profile.host}:${profile.port} · ${profile.codec} ${profile.bitrateKbps} kbps" +
+                "${if (profile.mode.equals("DJ", ignoreCase = true)) "DJ" else "SOURCE"} · " +
+                    "${profile.host}:${profile.port} · ${profile.codec} ${profile.bitrateKbps} kbps" +
                     (if (profile.mono) " · mono" else " · stereo"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -280,7 +281,7 @@ private fun EmptyState(onAddProfile: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            "Add a SHOUTcast / Icecast server to start broadcasting. Streamy keeps the list " +
+            "Add a SHOUTcast server to start broadcasting. Streamy keeps the list " +
                 "on this device — nothing is uploaded.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

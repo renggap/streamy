@@ -58,7 +58,9 @@ fun SettingsScreen(
     val context = LocalContext.current
     val profiles by vm.profiles.collectAsStateWithLifecycle()
     val inputDevices by vm.inputDevices.collectAsStateWithLifecycle()
-    val selectedDevice by vm.selectedDeviceName.collectAsStateWithLifecycle()
+    val selectedDevice = vm.selectedDeviceName.collectAsStateWithLifecycle().value  // plain val (smart-castable)
+    val selectedDeviceLabel = if (selectedDevice == null) "System default"
+        else inputDevices.firstOrNull { it.name == selectedDevice }?.label ?: selectedDevice
     var deviceExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { vm.refreshInputDevices() }
     var pendingClear by remember { mutableStateOf(false) }
@@ -99,7 +101,7 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                "Broadcast console for SHOUTcast v2 / Icecast sources.",
+                "Broadcast console for SHOUTcast v2 sources.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -116,7 +118,7 @@ fun SettingsScreen(
                 onExpandedChange = { deviceExpanded = it },
             ) {
                 OutlinedTextField(
-                    value = selectedDevice ?: "System default",
+                    value = selectedDeviceLabel,
                     onValueChange = {},
                     readOnly = true,
                     singleLine = true,
@@ -149,7 +151,7 @@ fun SettingsScreen(
                     )
                     inputDevices.forEach { d ->
                         DropdownMenuItem(
-                            text = { Text(d.name, style = MaterialTheme.typography.bodyMedium) },
+                            text = { Text(d.label, style = MaterialTheme.typography.bodyMedium) },
                             onClick = { vm.setInputDevice(d.name); deviceExpanded = false },
                         )
                     }

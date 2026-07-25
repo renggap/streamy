@@ -18,4 +18,7 @@ data class ProfileEntity(
     val mono: Boolean,
     val adminUser: String? = null,     // DNAS2 admin.cgi creds for now-playing metadata
     val adminPassword: String? = null, // (optional — only needed for metadata updates)
+    val mode: String = "SOURCE",       // "SOURCE" (DNAS) | "DJ" (sc_trans djport2)
+    val djUser: String? = null,        // sc_trans djlogin (auth UID field); DJ mode only
+    val djPort: Int? = null,           // sc_trans djport2; DJ mode only (null → uses [port])
 )
