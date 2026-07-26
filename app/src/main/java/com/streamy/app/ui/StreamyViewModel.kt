@@ -50,7 +50,7 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     // Same db name as StreamService so profile writes are visible without a sync layer.
     private val db: AppDatabase = Room.databaseBuilder(
         app, AppDatabase::class.java, "streamy.db",
-    ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3).build()
+    ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4).build()
 
     private val repo = ProfileRepository(db.profileDao())
 

@@ -11,4 +11,7 @@ interface SourceClient {
     fun connect(bitrateKbps: Int, name: String, genre: String)
     fun send(frame: ByteArray)
     fun close()
+    /** Push a now-playing title. Default no-op; [UvoxClient] sends Ultravox 0x902, [IcecastSourceClient]
+     *  injects ICY inline metadata (+ best-effort Icecast admin update). Harmless if unsupported. */
+    fun updateNowPlaying(title: String) {}
 }

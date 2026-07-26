@@ -40,6 +40,7 @@ import com.streamy.app.data.AudioConfig
 import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.BroadcastMode
 import com.streamy.app.data.Codec
+import com.streamy.app.data.DjProtocol
 import com.streamy.app.data.db.ProfileEntity
 
 /*
@@ -75,6 +76,7 @@ fun EditProfileScreen(
     var mount by remember(profileId) { mutableStateOf("/stream") }
     var mode by remember(profileId) { mutableStateOf(BroadcastMode.SOURCE) }
     var djUser by remember(profileId) { mutableStateOf("") }
+    var djMount by remember(profileId) { mutableStateOf("/") }
     var codec by remember(profileId) { mutableStateOf(Codec.MP3) }
     var bitrate by remember(profileId) { mutableStateOf(128) }
     var sampleRate by remember(profileId) { mutableStateOf(44_100) }
@@ -100,6 +102,7 @@ fun EditProfileScreen(
                 mode = runCatching { BroadcastMode.valueOf(p.mode.trim().uppercase()) }
                     .getOrDefault(BroadcastMode.SOURCE)
                 djUser = p.djUser.orEmpty()
+                djMount = p.djMount?.takeIf { it.isNotBlank() } ?: "/"
                 codec = runCatching { Codec.valueOf(p.codec.trim().uppercase()) }
                     .getOrDefault(Codec.MP3)
                 bitrate = p.bitrateKbps
@@ -117,7 +120,7 @@ fun EditProfileScreen(
     val sidErr = sid.toIntOrNull()?.let { it <= 0 } ?: true
     val passwordErr = password.isBlank()
     val mountErr = !isDj && mount.isBlank()        // mount is a DNAS concept; hidden in DJ mode
-    val djUserErr = isDj && djUser.isBlank()       // sc_trans djlogin goes in the auth UID field
+    val djUserErr = isDj && djUser.isBlank()       // sc_trans djlogin / Icecast Basic-auth user
     val formValid = !nameErr && !hostErr && !portErr && !sidErr && !passwordErr && !mountErr && !djUserErr &&
         bitrate in (if (codec == Codec.AAC) AudioConfigRules.AAC_BITRATES else AudioConfigRules.MP3_BITRATES) &&
         sampleRate in AudioConfigRules.SAMPLE_RATES
@@ -176,10 +179,17 @@ fun EditProfileScreen(
             }
             if (isDj) {
                 Text(
-                    "DJ mode: Streamy feeds sc_trans, which re-encodes to its own config. " +
-                        "Codec/bitrate below are uplink-only.",
+                    "DJ mode: protocol (Ultravox/sc_trans vs Icecast/harbor) is auto-detected at " +
+                        "connect. Codec/bitrate below are uplink-only (the server re-encodes).",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.tertiary,
+                )
+                LabeledTextField(
+                    label = "DJ mount",
+                    value = djMount,
+                    onValueChange = { djMount = it },
+                    placeholder = "/",
+                    keyboardType = KeyboardType.Uri,
                 )
             }
             LabeledTextField(
@@ -282,7 +292,6 @@ fun EditProfileScreen(
                 onMono = { b ->
                     if (!AudioConfigRules.needsHeAac(codec, bitrate) || b) mono = b
                 },
-                allowAac = !isDj,
             )
         }
 
@@ -319,6 +328,8 @@ fun EditProfileScreen(
                         // now flows through Ultravox 0x902 — no admin creds needed.
                         mode = mode.name,
                         djUser = if (isDj) djUser.trim() else null,
+                        djProtocol = DjProtocol.AUTO.name,
+                        djMount = if (isDj) djMount.trim().ifBlank { "/" } else null,
                     )
                     vm.saveProfile(entity) { onBack() }
                 },

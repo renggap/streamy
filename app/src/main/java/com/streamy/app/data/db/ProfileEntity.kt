@@ -18,7 +18,9 @@ data class ProfileEntity(
     val mono: Boolean,
     val adminUser: String? = null,     // DNAS2 admin.cgi creds for now-playing metadata
     val adminPassword: String? = null, // (optional — only needed for metadata updates)
-    val mode: String = "SOURCE",       // "SOURCE" (DNAS) | "DJ" (sc_trans djport2)
-    val djUser: String? = null,        // sc_trans djlogin (auth UID field); DJ mode only
-    val djPort: Int? = null,           // sc_trans djport2; DJ mode only (null → uses [port])
+    val mode: String = "SOURCE",       // "SOURCE" (DNAS) | "DJ" (sc_trans djport2 / Icecast harbor)
+    val djUser: String? = null,        // sc_trans djlogin (UID) OR Icecast HTTP-Basic user; DJ only
+    val djPort: Int? = null,           // DJ port (sc_trans djport2 / harbor); null → uses [port]
+    val djProtocol: String = "AUTO",   // DJ sub-protocol: AUTO | ULTRAVOX | ICECAST
+    val djMount: String? = null,       // Icecast/harbor mount (e.g. "/"); required for ICECAST
 )

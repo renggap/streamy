@@ -9,6 +9,13 @@ enum class Codec { AAC, MP3 }
  */
 enum class BroadcastMode { SOURCE, DJ }
 
+/**
+ * DJ sub-protocol (only meaningful when [BroadcastMode] is DJ). ULTRAVOX = sc_trans / sc_serv
+ * (binary Ultravox, djlogin in the auth UID). ICECAST = Icecast / Liquidsoap harbor HTTP source
+ * (`SOURCE <mount> ICE/1.0` + HTTP Basic auth). AUTO = sniff at connect time ([DjProtocolDetector]).
+ */
+enum class DjProtocol { AUTO, ULTRAVOX, ICECAST }
+
 /** Bitrate + sample-rate + channels resolved for an encode session. */
 data class AudioConfig(
     val codec: Codec,

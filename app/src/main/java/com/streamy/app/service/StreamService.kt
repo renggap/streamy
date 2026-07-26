@@ -31,9 +31,13 @@ import com.streamy.app.audio.StreamSink
 import com.streamy.app.data.AudioConfig
 import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.Codec
+import com.streamy.app.data.DjProtocol
 import com.streamy.app.data.ProfileRepository
 import com.streamy.app.data.db.AppDatabase
+import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.R
+import com.streamy.app.net.DjProtocolDetector
+import com.streamy.app.net.IcecastSourceClient
 import com.streamy.app.net.SourceClient
 import com.streamy.app.net.StreamTransport
 import com.streamy.app.net.TransportState
@@ -85,7 +89,7 @@ class StreamService : Service() {
 
     private val db by lazy {
         Room.databaseBuilder(this, AppDatabase::class.java, "streamy.db")
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
             .build()
     }
 
@@ -138,7 +142,7 @@ class StreamService : Service() {
                 val title = intent.getStringExtra(EXTRA_TITLE)
                 if (title != null) {
                     scope.launch {
-                        (client as? UvoxClient)?.updateNowPlaying(title)
+                        client?.updateNowPlaying(title)
                     }
                 }
             }
@@ -170,20 +174,37 @@ class StreamService : Service() {
                 // (no socket yet — connect() runs later from the transport coroutine).
                 val enc = EncoderFactory.create(cfg)
 
-                // Ultravox 2.1 client for BOTH codecs AND both modes: AAC rides audio/aacp
-                // (0x8003), MP3 rides audio/mpeg (0x7000). SOURCE talks to DNAS; DJ talks to
-                // sc_trans's djport2 with djlogin in the auth UID — sc_trans re-encodes the feed.
+                // Resolve the source client. SOURCE → Ultravox to DNAS. DJ → Ultravox (sc_trans)
+                // OR Icecast HTTP source (Liquidsoap harbor / Icecast), per the profile's
+                // djProtocol (AUTO sniffs the server at connect time).
                 val isDj = profile.mode.equals("DJ", ignoreCase = true)
-                val source: SourceClient = UvoxClient(
-                    host = profile.host,
-                    port = if (isDj) (profile.djPort ?: profile.port) else profile.port,
-                    sid = profile.sid,
-                    password = profile.password,
-                    mime = if (cfg.codec == Codec.AAC) "audio/aacp" else "audio/mpeg",
-                    sampleRateHz = cfg.sampleRateHz,
-                    channels = if (cfg.mono) 1 else 2,
-                    djUser = if (isDj) profile.djUser else null,
-                )
+                val djPort = if (isDj) (profile.djPort ?: profile.port) else profile.port
+                val source: SourceClient = if (!isDj) {
+                    UvoxClient(
+                        host = profile.host, port = profile.port, sid = profile.sid,
+                        password = profile.password,
+                        mime = if (cfg.codec == Codec.AAC) "audio/aacp" else "audio/mpeg",
+                        sampleRateHz = cfg.sampleRateHz, channels = if (cfg.mono) 1 else 2,
+                    )
+                } else {
+                    when (resolveDjProtocol(profile, djPort)) {
+                        DjProtocol.AUTO -> error("AUTO resolved by resolveDjProtocol")  // unreachable
+                        DjProtocol.ULTRAVOX -> UvoxClient(
+                            host = profile.host, port = djPort, sid = profile.sid,
+                            password = profile.password,
+                            mime = if (cfg.codec == Codec.AAC) "audio/aacp" else "audio/mpeg",
+                            sampleRateHz = cfg.sampleRateHz, channels = if (cfg.mono) 1 else 2,
+                            djUser = profile.djUser,
+                        )
+                        DjProtocol.ICECAST -> IcecastSourceClient(
+                            host = profile.host, port = djPort,
+                            mount = profile.djMount ?: "/",
+                            user = profile.djUser ?: "",
+                            password = profile.password,
+                            mime = if (cfg.codec == Codec.AAC) "audio/aacp" else "audio/mpeg",
+                        )
+                    }
+                }
 
                 // Resolve the user-selected input device by NAME for THIS session (ids are not
                 // stable across reboot/USB replug). Null → default mic.
@@ -298,6 +319,19 @@ class StreamService : Service() {
         val am = getSystemService(AUDIO_SERVICE) as AudioManager
         return am.getDevices(AudioManager.GET_DEVICES_INPUTS)
             .firstOrNull { it.isSource && it.productName?.toString() == name }
+    }
+
+    /** Parse the profile's DJ sub-protocol; AUTO → sniff the server (Ultravox vs Icecast). */
+    private fun resolveDjProtocol(profile: ProfileEntity, djPort: Int): DjProtocol {
+        val parsed = runCatching { DjProtocol.valueOf(profile.djProtocol.trim().uppercase()) }
+            .getOrDefault(DjProtocol.AUTO)
+        return when (parsed) {
+            DjProtocol.AUTO -> DjProtocolDetector.detect(
+                profile.host, djPort, profile.djMount ?: "/",
+                profile.djUser ?: "", profile.password,
+            )
+            else -> parsed
+        }
     }
 
     /**

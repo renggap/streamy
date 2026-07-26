@@ -140,7 +140,7 @@ class UvoxClient(
      * Best-effort: no-op if not connected. The frame trailer added by [message] is correct —
      * do NOT add a NUL inside the payload.
      */
-    fun updateNowPlaying(title: String) {
+    override fun updateNowPlaying(title: String) {
         val xml = ("<?xml version=\"1.0\" encoding=\"UTF-8\" ?><metadata><TIT2>"
             + title.xmlEsc() + "</TIT2></metadata>").toByteArray(Charsets.UTF_8)
         val payload = ByteArray(6 + xml.size)

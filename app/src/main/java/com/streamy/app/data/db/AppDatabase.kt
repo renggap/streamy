@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [ProfileEntity::class], version = 3, exportSchema = false)
+@Database(entities = [ProfileEntity::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
 
@@ -31,6 +31,17 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE profiles ADD COLUMN mode TEXT NOT NULL DEFAULT 'SOURCE'")
                 db.execSQL("ALTER TABLE profiles ADD COLUMN djUser TEXT")
                 db.execSQL("ALTER TABLE profiles ADD COLUMN djPort INTEGER")
+            }
+        }
+
+        /**
+         * v3 → v4: DJ sub-protocol + Icecast mount. djProtocol defaults AUTO; djMount nullable.
+         * Existing DJ rows (ULTRAVOX/sc_trans) keep working under AUTO, which sniffs at connect.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE profiles ADD COLUMN djProtocol TEXT NOT NULL DEFAULT 'AUTO'")
+                db.execSQL("ALTER TABLE profiles ADD COLUMN djMount TEXT")
             }
         }
     }

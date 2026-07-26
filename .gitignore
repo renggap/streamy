@@ -12,3 +12,4 @@
 
 # wrangler local state
 /.wrangler/
+app/src/main/cpp/lame/libmp3lame/vector/.deps/
