@@ -14,7 +14,14 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.Streamy"
-        android:usesCleartextTraffic="true">   <!-- SHOUTcast source is plain TCP/http; users broadcast to their own http servers. -->
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:networkSecurityConfig="@xml/network_security_config">
+        <!-- Cleartext (http://) sources are allowed per-host in network_security_config (the
+             SHOUTcast/Ultravox/Icecast source protocol is plain TCP/http), never globally:
+             `usesCleartextTraffic` is NOT set here — the debug-only overlay sets it for LAN
+             dev servers, and release builds fall back to the config below. -->
 
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>

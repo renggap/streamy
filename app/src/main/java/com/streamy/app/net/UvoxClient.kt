@@ -81,14 +81,19 @@ class UvoxClient(
             val authResp = request(1, 0x001, "2.1:$sid:$encUid:$encBlob")
             if (!authResp.startsWith("ACK")) throw ProtocolException("auth NAK: $authResp")
 
-            // 3) Stream config (order per spec).
+            // 3) Stream config (order per spec). Values are user-controlled (profile name/genre):
+            //    strip CR/LF + NUL so a hostile name can't inject control characters into the
+            //    ASCIIZ payload, and truncate so the u16 length field can't overflow.
             requireAck(request(1, 0x040, mime), "mime")
             requireAck(request(1, 0x002, "$bitrateKbps:$bitrateKbps"), "setup")
             requireAck(request(1, 0x003, "2048:2048"), "buffer")
-            requireAck(request(1, 0x100, name), "icy-name")
-            requireAck(request(1, 0x101, genre), "icy-genre")
+            requireAck(request(1, 0x100, WireSafety.headerValue(name)), "icy-name")
+            requireAck(request(1, 0x101, WireSafety.headerValue(genre)), "icy-genre")
             requireAck(request(1, 0x102, "http://streamy.app"), "icy-url")
-            requireAck(request(1, 0x103, "1"), "icy-pub")
+            // Public visibility (0x103 = "1"). Streamy always broadcasts publicly (listeners
+            // join from the directory); if non-public streams are ever supported, plumb a
+            // profile field through here instead of hardcoding "1".
+            requireAck(request(1, 0x103, ICY_PUB), "icy-pub")
             requireAck(request(1, 0x008, "16377:16377"), "max-payload")
 
             // 4) Standby -> "ACK:Data transfer mode".
@@ -141,8 +146,11 @@ class UvoxClient(
      * do NOT add a NUL inside the payload.
      */
     override fun updateNowPlaying(title: String) {
+        // Strip CR/LF + other control chars (a title can't break the XML) and cap at 512 chars
+        // so 6 + xml.size never overflows the u16 payload length in [message].
+        val safe = WireSafety.stripControlChars(title).take(WireSafety.MAX_HEADER_VALUE)
         val xml = ("<?xml version=\"1.0\" encoding=\"UTF-8\" ?><metadata><TIT2>"
-            + title.xmlEsc() + "</TIT2></metadata>").toByteArray(Charsets.UTF_8)
+            + safe.xmlEsc() + "</TIT2></metadata>").toByteArray(Charsets.UTF_8)
         val payload = ByteArray(6 + xml.size)
         payload[1] = 1; payload[3] = 1; payload[5] = 1 // MetadataID=1, Span=1, Index=1 (BE u16, high byte 0)
         System.arraycopy(xml, 0, payload, 6, xml.size)
@@ -189,6 +197,10 @@ class UvoxClient(
     }
 
     companion object {
+        /** icy-pub value (0x103): "1" = public (directory-listed). Streamy is always public. */
+        private const val ICY_PUB = "1"
+
+        /** Frame classifier bits — see the class doc for the layout. */
         private const val HANDSHAKE_TIMEOUT_MS = 6_000
         private val NULL_CHAR = 0.toChar() // ASCIIZ terminator used in Ultravox payloads
         // ADTS profile field = AAC-LC base layer; carries HE-AAC backward-compatibly (see wrapAdts).

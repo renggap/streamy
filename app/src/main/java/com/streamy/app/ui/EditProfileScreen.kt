@@ -84,6 +84,9 @@ fun EditProfileScreen(
 
     var showPassword by remember(profileId) { mutableStateOf(false) }
     var pendingDelete by remember(profileId) { mutableStateOf(false) }
+    // The DB row as loaded — used by DELETE so deletion matches exactly what's persisted,
+    // never a subset reconstructed from (possibly edited) form state.
+    var loadedRow by remember(profileId) { mutableStateOf<ProfileEntity?>(null) }
     // New profile (isNew) needs no async DB load -> ready immediately. Existing rows start
     // not-loaded and flip after the LaunchedEffect read. (Previously `!isNew` — inverted,
     // which rendered a blank surface for new profiles.)
@@ -93,6 +96,7 @@ fun EditProfileScreen(
     LaunchedEffect(profileId) {
         if (!isNew) {
             vm.getProfile(profileId!!)?.let { p ->
+                loadedRow = p
                 name = p.name
                 host = p.host
                 port = p.port.toString()
@@ -365,16 +369,9 @@ fun EditProfileScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val id = profileId ?: 0L
-                    if (id != 0L) {
-                        vm.deleteProfile(
-                            ProfileEntity(
-                                id = id, name = name, host = host, port = port.toIntOrNull() ?: 0,
-                                sid = sid.toIntOrNull() ?: 1, password = password, mount = mount,
-                                codec = codec.name, bitrateKbps = bitrate,
-                                sampleRateHz = sampleRate, mono = mono,
-                            ),
-                        )
+                    val row = loadedRow
+                    if (row != null) {
+                        vm.deleteProfile(row)   // the exact persisted row, not form-derived
                     }
                     pendingDelete = false
                     onBack()

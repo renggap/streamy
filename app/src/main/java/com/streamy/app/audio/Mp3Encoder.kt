@@ -17,7 +17,24 @@ class Mp3Encoder(
     private val channels = if (mono) 1 else 2
     private val ptr = nativeInit(sampleRateHz, channels, bitrateKbps)
 
-    init { check(ptr != 0L) { "lame_init_params failed" } }
+    /**
+     * The sample rate LAME actually emits after `lame_init_params` (read back via
+     * `lame_get_out_samplerate`). LAME may internally adjust the output rate — notably halving
+     * it at low bitrates — and the app's bitrate math + direct-sink MP3 recording assume the
+     * output matches the configured input. Pinned here so a mismatch is a loud failure, not a
+     * silently wrong stream.
+     */
+    val outSampleRateHz: Int = if (ptr != 0L) nativeOutSampleRate(ptr) else 0
+
+    init {
+        check(ptr != 0L) { "lame_init_params failed" }
+        // The AudioConfigRules ladder clamps MP3 16/24 kbps to 22.05 kHz (MPEG-2), which LAME
+        // accepts verbatim. Any other adjustment is unexpected — fail loudly rather than ship a
+        // stream whose real bitrate differs from what DNAS2 reports.
+        check(outSampleRateHz == sampleRateHz) {
+            "LAME output sample rate $outSampleRateHz != configured $sampleRateHz"
+        }
+    }
 
     private var closed = false
     override fun close() {
@@ -28,6 +45,10 @@ class Mp3Encoder(
     }
 
     override fun encode(pcm: ShortArray): List<ByteArray> {
+        // Defense-in-depth: AudioPipeline.stop() joins capture before flushing the encoder, so
+        // encode() should never see a closed handle. If a wedged capture thread outlives the
+        // join (500ms cap), calling into freed native memory is UB — refuse instead.
+        check(!closed) { "encode after close" }
         // LAME worst-case: 1.25x + 7200 bytes per frame (per LAME docs).
         val maxOut = pcm.size * 5 / 4 + 7200
         val out = ByteArray(maxOut)
@@ -42,6 +63,7 @@ class Mp3Encoder(
     }
 
     private external fun nativeInit(sampleRate: Int, channels: Int, bitrateKbps: Int): Long
+    private external fun nativeOutSampleRate(ptr: Long): Int
     private external fun nativeEncode(ptr: Long, pcm: ShortArray, n: Int, channels: Int, out: ByteArray): Int
     private external fun nativeFlush(ptr: Long, out: ByteArray): Int
     private external fun nativeClose(ptr: Long)

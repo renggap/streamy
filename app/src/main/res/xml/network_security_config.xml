@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Release-safe default: NO global cleartext. The SHOUTcast/Ultravox/Icecast SOURCE protocol
+  itself runs over raw TCP sockets, which Android's cleartext policy does not govern — so
+  broadcasting is unaffected by this file. It governs the HTTP-stack components only (the
+  Icecast /admin/metadata best-effort title update), which must not silently send the profile's
+  password over plaintext http in release builds.
+
+  The debug build overlay (src/debug/AndroidManifest.xml) sets usesCleartextTraffic="true" so
+  LAN dev servers work on any host; release falls back to TLS-only for HTTP clients. A release
+  build pointed at an http:// server still streams (raw socket) but skips the admin title push.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false"/>
+</network-security-config>

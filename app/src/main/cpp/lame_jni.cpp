@@ -22,6 +22,19 @@ Java_com_streamy_app_audio_Mp3Encoder_nativeInit(
     return reinterpret_cast<jlong>(g);
 }
 
+/**
+ * LAME can internally adjust the OUTPUT sample rate during lame_init_params (notably halving
+ * it at low bitrates). The app's bitrate math and the MP3 direct-sink recording assume the
+ * output equals the configured input rate, so the wrapper exposes the actual value back to
+ * Kotlin ([Mp3Encoder.outSampleRateHz]) where it is pinned against the configured rate.
+ */
+extern "C" JNIEXPORT jint JNICALL
+Java_com_streamy_app_audio_Mp3Encoder_nativeOutSampleRate(JNIEnv* /*env*/, jobject /*this*/, jlong ptr) {
+    lame_t g = reinterpret_cast<lame_t>(ptr);
+    if (!g) return 0;
+    return lame_get_out_samplerate(g);
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_streamy_app_audio_Mp3Encoder_nativeEncode(
         JNIEnv* env, jobject /*this*/, jlong ptr, jshortArray pcm, jint n, jint channels,

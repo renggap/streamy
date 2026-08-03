@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only overlay: permits cleartext HTTP for LAN dev servers (the Settings screen says
+  "Cleartext HTTP is enabled in debug builds" — this is where that promise is kept). Release
+  builds inherit the main manifest, which does NOT set usesCleartextTraffic and applies the
+  TLS-only network_security_config.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:usesCleartextTraffic="true"/>
+</manifest>

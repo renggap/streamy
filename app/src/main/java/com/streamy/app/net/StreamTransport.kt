@@ -5,6 +5,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.random.Random
 
 class StreamTransport(
     private val scope: CoroutineScope,
@@ -16,17 +18,31 @@ class StreamTransport(
      * work. Other states fire on this transport's own coroutine.
      */
     private val onState: (TransportState) -> Unit,
+    /**
+     * Reconnect backoff schedule. Injected so tests can use tiny delays and assert the
+     * reported [TransportState.Backoff.ms] equals the value actually slept. Defaults to
+     * [nextBackoffMs] — randomized ±20% jitter so concurrent clients don't reconnect in
+     * lockstep (thundering herd).
+     */
+    private val backoffMs: (attempt: Int) -> Long = { nextBackoffMs(it) },
 ) {
     private val queue = Channel<ByteArray>(CAPACITY)
-    private var drops = 0L
+
+    // Atomic: [enqueue] is called from the audio capture thread AND from
+    // AudioPipeline.stop()'s flush path (service scope) after capture exits.
+    private val drops = AtomicLong(0)
+
     @Volatile private var stopped = false
     private var job: Job? = null
+
+    /** Total frames dropped since [start] (drop-newest policy). Monotonic; safe to poll. */
+    val droppedFrames: Long get() = drops.get()
 
     /** Non-blocking enqueue. If the queue is full, DROP THE NEW frame (drop-newest) — keeps
      *  broadcast latency low under downstream backpressure. Counts the drop for metrics. */
     fun enqueue(frame: ByteArray) {
         val result = queue.trySend(frame)
-        if (result.isFailure) { drops++; onState(TransportState.Backpressure(drops)) }
+        if (result.isFailure) onState(TransportState.Backpressure(drops.incrementAndGet()))
     }
 
     fun start() {
@@ -52,8 +68,11 @@ class StreamTransport(
                         onState(TransportState.Failed("gave_up after $attempt attempts"))
                         break
                     }
-                    onState(TransportState.Backoff(attempt, nextBackoffMs(attempt)))
-                    delay(nextBackoffMs(attempt))
+                    // Compute ONCE and sleep the same value we report, so the state the UI
+                    // shows is exactly the delay being waited (single source of truth).
+                    val backoff = backoffMs(attempt)
+                    onState(TransportState.Backoff(attempt, backoff))
+                    delay(backoff)
                 }
             }
             // Loop only exits on stop() or give-up — both already emitted their terminal
@@ -75,11 +94,16 @@ class StreamTransport(
     companion object {
         const val CAPACITY = 64
         fun shouldGiveUp(attempt: Int) = attempt >= 10
-        fun nextBackoffMs(attempt: Int): Long {
+
+        /**
+         * Backoff ladder: 1s, 2s, 5s, 10s, then 20s cap — with ±20% uniform random jitter,
+         * clamped to [500, 24_000] ms. Randomized (not attempt-seeded) so many clients that
+         * fail together spread their retries instead of stampeding in lockstep.
+         */
+        fun nextBackoffMs(attempt: Int, random: Random = Random): Long {
             val raw = listOf(1_000L, 2_000L, 5_000L, 10_000L).getOrElse(attempt - 1) { 20_000L }
-            // deterministic ±10% jitter (no Math.random — keeps it unit-testable)
-            val jit = raw * (((attempt * 37) % 20) - 10) / 100
-            return (raw + jit).coerceIn(500L, 20_000L)
+            val jitter = random.nextLong(-20L, 21L) * raw / 100
+            return (raw + jitter).coerceIn(500L, 24_000L)
         }
     }
 }

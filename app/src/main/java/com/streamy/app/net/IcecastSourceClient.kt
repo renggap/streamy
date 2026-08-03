@@ -46,12 +46,17 @@ class IcecastSourceClient(
         try {
             val raw = s.getOutputStream()
             val auth = Base64.getEncoder().encodeToString("$user:$password".toByteArray(Charsets.US_ASCII))
+            // Header values are user-controlled (profile name/mount): strip CR/LF + NUL so a
+            // malicious name can't inject extra header lines, and truncate to the wire cap.
+            val safeMount = WireSafety.headerValue(mount)
+            val safeName = WireSafety.headerValue(name)
+            val safeGenre = WireSafety.headerValue(genre)
             val req = StringBuilder().apply {
-                append("SOURCE ").append(mount).append(" ICE/1.0\r\n")
+                append("SOURCE ").append(safeMount).append(" ICE/1.0\r\n")
                 append("Authorization: Basic ").append(auth).append("\r\n")
                 append("Content-Type: ").append(mime).append("\r\n")
-                append("icy-name: ").append(name).append("\r\n")
-                append("icy-genre: ").append(genre).append("\r\n")
+                append("icy-name: ").append(safeName).append("\r\n")
+                append("icy-genre: ").append(safeGenre).append("\r\n")
                 append("icy-url: http://streamy.app\r\n")
                 append("icy-pub: 1\r\n")
                 append("icy-br: ").append(bitrateKbps).append("\r\n")
@@ -62,7 +67,10 @@ class IcecastSourceClient(
             raw.flush()
 
             val status = readLine(s.getInputStream())
-            if (status.isNotEmpty() && !status.contains("200")) {
+            // Parse the numeric code, never substring-match: `HTTP/1.0 2000 Broken` or a body
+            // line containing "200" must not pass. 2xx is success for a source handshake.
+            val code = WireSafety.parseHttpStatus(status)
+            if (code !in 200..299) {
                 throw ProtocolException("icecast source rejected: $status")
             }
             s.soTimeout = 0  // streaming: writes own the socket; no read timeout
@@ -87,8 +95,11 @@ class IcecastSourceClient(
 
     /** Push now-playing: set the ICY inline title (next injected block) + best-effort Icecast admin. */
     override fun updateNowPlaying(title: String) {
-        metaStream?.setTitle(title)
-        runCatching { adminUpdateMetadata(title) }  // works on Icecast; harbor 404s — ignored
+        // CR/LF stripped so a title can't break out of the StreamTitle='...' block; truncated
+        // so the padded block stays far under the 4080-byte ICY metadata limit.
+        val safe = WireSafety.stripControlChars(title).take(WireSafety.MAX_TITLE)
+        metaStream?.setTitle(safe)
+        runCatching { adminUpdateMetadata(safe) }  // works on Icecast; harbor 404s — ignored
     }
 
     override fun close() {

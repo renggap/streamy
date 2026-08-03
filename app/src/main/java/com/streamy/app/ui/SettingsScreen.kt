@@ -45,8 +45,8 @@ import com.streamy.app.R
  * App identity, the LAME LGPL notice (read raw text), and a destructive "clear all
  * profiles" action. No new persistence — just reads [vm.profiles] and calls vm.clear.
  *
- * ponytail: move cleartext-traffic note into a proper network-security-config doc in
- * Task 14 release config. Mentioned here as a dev-only warning.
+ * Cleartext policy is now split per build type: debug overlay allows it, release is
+ * TLS-only for HTTP clients (see network_security_config.xml). This copy documents that.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -172,7 +172,9 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Cleartext HTTP is enabled in debug builds for LAN dev servers. Disable before release.",
+                "Cleartext HTTP is enabled in debug builds for LAN dev servers. " +
+                    "Release builds restrict HTTP clients to TLS; the raw-socket source " +
+                    "protocol (SHOUTcast/Ultravox/Icecast) is unaffected.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.tertiary,
             )

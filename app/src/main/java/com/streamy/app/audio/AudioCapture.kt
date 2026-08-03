@@ -88,7 +88,9 @@ class AudioCapture(
         record?.run { try { stop() } finally { release() } }
         record = null
         // Best-effort join so the audio thread can't call encode() after we tear down;
-        // bounded by 500ms + try/catch so a stuck thread can't wedge stop().
+        // bounded by 500ms + try/catch so a stuck thread can't wedge stop(). If the thread is
+        // still alive after the join, Mp3Encoder.encode's `check(!closed)` (defense-in-depth)
+        // turns any late frame into a loud failure instead of UB on a freed native handle.
         try { thread?.join(500) } catch (_: InterruptedException) {}
         thread = null
     }

@@ -287,6 +287,11 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     fun saveProfile(p: ProfileEntity, onSelect: (Long) -> Unit = {}) {
         viewModelScope.launch {
             val id = if (p.id == 0L) repo.save(p) else { repo.update(p); p.id }
+            // DJ protocol was possibly re-sniffed; drop the cached detection so the next AUTO
+            // connect re-probes the (possibly changed) server.
+            if (p.mode.equals("DJ", ignoreCase = true)) {
+                com.streamy.app.net.DjProtocolDetector.invalidate(p.host, p.djPort ?: p.port)
+            }
             _selectedProfileId.value = id
             onSelect(id)
             _userMessage.value = "Saved ${p.name}"

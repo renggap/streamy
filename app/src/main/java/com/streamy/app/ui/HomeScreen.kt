@@ -89,6 +89,10 @@ fun HomeScreen(
     val hasProfile = selectedProfile != null
     val chooserEnabled = !isLive && !isBusy && hasProfile
 
+    // Audio being dropped under transport backpressure — the one thing a DJ must know. Only
+    // surfaced while Live (drops only happen then) and only when non-zero.
+    val droppedFrames = (state as? StreamState.Live)?.droppedFrames ?: 0L
+
     Box(modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -101,6 +105,13 @@ fun HomeScreen(
             Masthead()
 
             StatePill(state = state)
+
+            if (isLive && droppedFrames > 0L) {
+                Hint(
+                    "Dropped $droppedFrames frame${if (droppedFrames == 1L) "" else "s"} — network can't keep up; listeners may hear gaps",
+                    tone = HintTone.Warn,
+                )
+            }
 
             HeroControl(
                 state = state,
@@ -244,7 +255,7 @@ private enum class PillTone { Idle, Busy, Live, Error }
 private fun StreamState.toPill(): Pair<String, PillTone> = when (this) {
     StreamState.Idle -> "OFF AIR" to PillTone.Idle
     StreamState.Connecting -> "CONNECTING" to PillTone.Busy
-    StreamState.Live -> "ON AIR" to PillTone.Live
+    is StreamState.Live -> "ON AIR" to PillTone.Live
     is StreamState.Reconnecting -> "RECONNECTING · attempt $attempt" to PillTone.Busy
     is StreamState.Error -> reason.humanize() to PillTone.Error
 }

@@ -99,6 +99,15 @@ class StreamService : Service() {
     private var encoder: Encoder? = null
     private var profileName: String? = null
 
+    // Drop-newest counter snapshot at the moment the transport went Live. The transport's own
+    // counter resets on each connect, so Live.droppedFrames = current - baseline gives the
+    // drops that happened during THIS live session (the transport emits Backpressure states
+    // inline from the audio thread; we fold them into the next Live emission below).
+    @Volatile private var liveDropBaseline = 0L
+
+    // Last time a Backpressure drop-count made it to the UI (throttled; see toStreamState).
+    @Volatile private var lastDropUiEmitMs = 0L
+
     /** Snapshot of the running encode config — drives MP3-vs-transcode sink selection. */
     @Volatile private var liveCfg: AudioConfig? = null
 
@@ -230,9 +239,19 @@ class StreamService : Service() {
                         scope = scope,
                         connect = { source.connect(cfg.bitrateKbps, profile.name, "Speech") },
                         send = { source.send(it) },
-                        onState = { ts -> ts.toStreamState()?.let { s -> _state.value = s } },
+                        onState = { ts ->
+                            // Mic-busy / teardown race guard: the audio thread may set Error +
+                            // call stopAndShutdown() while the transport coroutine is still inside
+                            // connect() and about to emit Connecting/Live. Once shuttingDown is
+                            // latched, transport state must not overwrite the Error the user saw.
+                            if (shuttingDown) return@StreamTransport
+                            ts.toStreamState()?.let { s -> _state.value = s }
+                        },
                     )
                     transport = t
+                    // Baseline the drop counter before the transport starts so Live.droppedFrames
+                    // counts drops of THIS session only.
+                    liveDropBaseline = t.droppedFrames
                     val p = AudioPipeline(
                         capture = AudioCapture(
                             sampleRateHz = cfg.sampleRateHz,
@@ -335,19 +354,34 @@ class StreamService : Service() {
     }
 
     /**
-     * Map [TransportState] -> [StreamState]. Returns null for [TransportState.Backpressure]
-     * so the UI isn't spammed with drop-count updates (drop-newest only).
+     * Map [TransportState] -> [StreamState]. [TransportState.Backpressure] is folded into the
+     * current [StreamState.Live] (its drops show up in [StreamState.Live.droppedFrames]) so a
+     * DJ sees audio being dropped as it happens — but throttled to ~4 Hz so a sustained stall
+     * doesn't spam recompositions. Returns null so the transport's state machine is unchanged.
      */
     private fun TransportState.toStreamState(): StreamState? = when (this) {
         TransportState.Connecting -> StreamState.Connecting
         TransportState.Live -> {
             updateNotification("Live: ${profileName.orEmpty()}")
-            StreamState.Live
+            val t = transport
+            StreamState.Live(droppedFrames = ((t?.droppedFrames ?: 0L) - liveDropBaseline).coerceAtLeast(0L))
         }
         is TransportState.Reconnecting -> StreamState.Reconnecting(attempt)
         is TransportState.Backoff ->
             if (attempt <= 0) StreamState.Connecting else StreamState.Reconnecting(attempt)
-        is TransportState.Backpressure -> null
+        is TransportState.Backpressure -> {
+            val current = _state.value
+            val now = System.currentTimeMillis()
+            if (current is StreamState.Live && now - lastDropUiEmitMs >= DROP_UI_THROTTLE_MS) {
+                val t = transport
+                val total = ((t?.droppedFrames ?: 0L) - liveDropBaseline).coerceAtLeast(0L)
+                if (total != current.droppedFrames) {
+                    lastDropUiEmitMs = now
+                    _state.value = StreamState.Live(droppedFrames = total)
+                }
+            }
+            null
+        }
         is TransportState.Failed -> StreamState.Error(reason)
     }
 
@@ -490,5 +524,8 @@ class StreamService : Service() {
         const val EXTRA_TITLE = "com.streamy.app.extra.TITLE"
         const val EXTRA_DEVICE_NAME = "com.streamy.app.extra.DEVICE_NAME"
         const val NOTIF_ID = 0x5bee7
+
+        /** Minimum interval between Backpressure-driven Live emissions (≈4 Hz). */
+        const val DROP_UI_THROTTLE_MS = 250L
     }
 }
