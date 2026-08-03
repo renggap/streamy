@@ -39,9 +39,25 @@ class StreamTransport(
     val droppedFrames: Long get() = drops.get()
 
     /** Non-blocking enqueue. If the queue is full, DROP THE NEW frame (drop-newest) — keeps
-     *  broadcast latency low under downstream backpressure. Counts the drop for metrics. */
+     *  broadcast latency low under downstream backpressure. Counts the drop for metrics.
+     *
+     *  After [stop] the queue is closed: a late producer (audio thread still draining a frame
+     *  while teardown runs) gets `Closed` from [Channel.trySend]. That must be SILENT — no
+     *  phantom Backpressure state and no drop-count bump — or the UI could see a stale
+     *  Backpressure after the terminal Idle/Error, and the session's drop metric would count
+     *  frames the transport never accepted. Same latch-and-suppress pattern as the service's
+     *  mic-busy `shuttingDown` gate. */
     fun enqueue(frame: ByteArray) {
+        // trySend() returns: Success (accepted), Failure/Closed (not accepted — either full or
+        // stopped). The two rejection reasons MUST behave differently:
+        //   - queue full   → drop-newest: count + surface Backpressure (the live product matters,
+        //                     so a late frame is dropped rather than stalling the audio thread)
+        //   - channel closed (stop() latched) → silent: a producer frame arriving during teardown
+        //                     must not emit phantom Backpressure after the terminal Idle/Error, nor
+        //                     pollute the session drop metric.
+        // isClosed is the only reliable discriminator (ChannelResult.Closed is internal).
         val result = queue.trySend(frame)
+        if (result.isClosed) return
         if (result.isFailure) onState(TransportState.Backpressure(drops.incrementAndGet()))
     }
 

@@ -2,7 +2,7 @@
 
 Date: 2026-08-03
 Scope: full `app/` source (Kotlin + JNI/CMake), tests, gradle, manifest, docs.
-Validation performed this session: `./gradlew :app:testDebugUnitTest --offline` (BUILD SUCCESSFUL, 49 tests: 43 executed + 6 skipped, 0 failures), `./gradlew :app:assembleDebug --offline` (BUILD SUCCESSFUL, CMake + APK). All 16 findings below were fixed in this session; see §9 status column and the fix notes in §3/§5/§6.
+Validation performed this session: `./gradlew :app:testDebugUnitTest --offline` (BUILD SUCCESSFUL, **56 tests: 50 executed + 6 env-gated skipped, 0 failures**), `./gradlew :app:assembleDebug --offline` (BUILD SUCCESSFUL, CMake + APK). All 16 findings below were fixed in this session; see §9 status column and the fix notes in §3/§5/§6. Gate hardening added 7 more tests (49→56) and uncovered **two real runtime bugs** the original fixes would have shipped: (1) `Mp3TranscodeSink` used `queue.offer(null)` as its flush end-marker, but `ArrayBlockingQueue` forbids null — the marker was silently swallowed (`runCatching`), so `flush()`'s join timed out and the encoder's trailing bytes (up to ~1 s of audio) were never written; (2) `StreamTransport.enqueue` after `stop()` reported phantom `Backpressure` (a closed-channel `Failure` was treated as queue-full), emitting a stale state after the terminal Idle/Error and polluting the drop metric. Both fixed and covered by the new tests (§10).
 
 ---
 
@@ -173,7 +173,7 @@ The ADTS wrapper declares AAC-LC profile with implicit SBR (per the excellent co
 
 ## 7. Testing
 
-This is the standout area. Evidence from this session: 49 JVM tests ran, 0 failures, 6 skipped (all env-gated live tests — correctly skipped without creds). The 33-test baseline from the review grew to 49 with the additions below, which also close most of the "Gaps" listed here.
+This is the standout area. Evidence from this session: 56 JVM tests ran, 0 failures, 6 skipped (all env-gated live tests — correctly skipped without creds). The 33-test baseline from the review grew to 56 with the additions below, which also close most of the "Gaps" listed here.
 
 **What's genuinely good.**
 
@@ -222,12 +222,12 @@ Status: ✅ fixed in this session · 🔧 mitigated / accepted · ⬜ open
 | 5 | P1 | `AndroidManifest.xml:17` | `usesCleartextTraffic` true for all builds; Settings copy promises debug-only | ✅ main manifest has no cleartext; debug overlay + `network_security_config` (TLS-only base) |
 | 6 | P1 | `ProfileEntity` / manifest | Passwords plaintext in Room, `allowBackup` default true → adb-backup exfil | ✅ `allowBackup="false"` + `fullBackupContent="false"` + `dataExtractionRules` exclude-all |
 | 7 | P2 | `StreamService.kt:341-352` | Backpressure drops invisible to the UI | ✅ `Live.droppedFrames` + HomeScreen Warn hint (throttled 250 ms) |
-| 8 | P2 | `StreamService` mic-busy | Error state can race transport's `Live` transition (state ordering) | ✅ transport state updates suppressed once `shuttingDown` latched |
+| 8 | P2 | `StreamService` mic-busy | Error state can race transport's `Live` transition (state ordering) | ✅ transport state updates suppressed once `shuttingDown` latched; `enqueue_after_stop_is_suppressed_not_backpressure` + `no_terminal_state_after_stop` (StreamTransport tests) prove late frames/states after the latch are silent — no phantom Backpressure, no drop-metric pollution |
 | 9 | P2 | `IcecastSourceClient.kt:65` | Status parse uses `contains("200")` not code parse | ✅ `WireSafety.parseHttpStatus` (exact 3-digit 100..999) |
 | 10 | P2 | `IcecastSourceClient` headers | Profile strings (`name`, `mount`) not CRLF-sanitized → header injection risk | ✅ `WireSafety.headerValue` on mount/name/genre + titles; `UvoxClient` name/genre/titles too |
 | 11 | P2 | `UvoxClient.kt:143` | No title length cap; u16 length could overflow on huge input | ✅ titles truncated via `WireSafety` (MAX_TITLE=1024) in both clients |
-| 12 | P2 | `AudioPipeline` + `Mp3TranscodeSink` | Second LAME encode on the audio thread while recording AAC → mic_busy false positives on slow devices | ✅ transcode moved to a dedicated thread with bounded `ArrayBlockingQueue` (drop-newest, join on flush) |
-| 13 | P2 | `DjProtocolDetector` | Icecast probe writes 2 KB garbage to the port; AUTO detection not cached | ✅ 16-byte probe nudge; per-(host,port) cache + `invalidate()` on profile save |
+| 12 | P2 | `AudioPipeline` + `Mp3TranscodeSink` | Second LAME encode on the audio thread while recording AAC → mic_busy false positives on slow devices | ✅ transcode moved to a dedicated thread with bounded `ArrayBlockingQueue` (drop-newest, join on flush); `Mp3TranscodeSinkTest` (3 tests, fake encoder) proves onPcm never blocks, drop-newest counts overflow, flush joins and drains, encoder-death clears queue so join terminates. Gate hardening also fixed a real bug the original shipped: `offer(null)` end-marker is rejected by `ArrayBlockingQueue`, so flush silently timed out and dropped the encoder's trailing bytes — replaced with an empty-array sentinel |
+| 13 | P2 | `DjProtocolDetector` | Icecast probe writes 2 KB garbage to the port; AUTO detection not cached | ✅ 16-byte probe nudge; per-(host,port) cache + `invalidate()` on profile save; `detection_is_cached_until_invalidate` (fake-server test) proves cached calls re-probe 0 times and invalidate re-probes exactly once |
 | 14 | P3 | `AudioCapture.kt:92` | 500 ms join cap + `Mp3Encoder.encode` unchecked `closed` | ✅ encode-after-close guard (`check(!closed)`); join note documents defense-in-depth |
 | 15 | P3 | `EditProfileScreen` delete | Rebuilds entity from form fields instead of the loaded row | ✅ stores the loaded row, deletes exactly what's persisted |
 | 16 | P3 | `UvoxClient` | `icy-pub: 1` hardcoded | 🔧 named `ICY_PUB` constant + doc note (Streamy is always public; profile field if ever non-public) |
@@ -236,7 +236,7 @@ Status: ✅ fixed in this session · 🔧 mitigated / accepted · ⬜ open
 
 ## 10. Verdict
 
-This is a **solid v1** with real engineering discipline: the concurrency model is coherent and mostly provably safe, the protocol layer is tested against real servers with golden vectors, and the UI is genuinely well-crafted. All 16 findings from §9 were fixed in this session (15 fixed outright, 1 documented constant) and the test suite grew from 33 to 49 tests with 0 failures.
+This is a **solid v1** with real engineering discipline: the concurrency model is coherent and mostly provably safe, the protocol layer is tested against real servers with golden vectors, and the UI is genuinely well-crafted. All 16 findings from §9 were fixed in this session (15 fixed outright, 1 documented constant). The test suite grew from 33 to **56 tests** with 0 failures (50 executed + 6 env-gated skipped). Gate hardening also host-compiled the vendored LAME (`scripts/lame_readback.c`) against the app's exact config — `lame_get_out_samplerate` returns 44100 for the 44.1 kHz mono 128 kbps MP3 path the `check` pins — and the new tests caught two real bugs the original fixes would have shipped (§5 header).
 
 Priorities if I were the author (post-fix):
 

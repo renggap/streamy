@@ -61,19 +61,28 @@ class Mp3TranscodeSink(
     out: OutputStream,
     sampleRateHz: Int,
     mono: Boolean,
+    /** Encoder factory: production passes LAME; tests inject a fake (no JNI load). */
+    private val encoderFactory: () -> Encoder = {
+        Mp3Encoder(sampleRateHz, FILE_BITRATE_KBPS, mono)
+    },
 ) : StreamSink {
     private val out = BufferedOutputStream(out, BUF)
 
     // Bounded pipe so a burst of PCM can't balloon memory; drop-newest on overflow (recording
-    // a gap is acceptable — the live stream is the product).
-    private val queue = ArrayBlockingQueue<ShortArray?>(QUEUE_CAPACITY)
+    // a gap is acceptable — the live stream is the product). Empty array = flush end-marker:
+    // ArrayBlockingQueue forbids null, and a 0-length ShortArray is never a real PCM frame
+    // (the pipeline sends >= 1024 samples), so it's a safe sentinel the run-loop can detect.
+    private val queue = ArrayBlockingQueue<ShortArray>(QUEUE_CAPACITY)
 
     // Written on the audio thread (enqueue path), read by the transcode thread.
     private val droppedFrames = java.util.concurrent.atomic.AtomicLong(0)
     private val closed = AtomicBoolean(false)
 
-    private val encoder = Mp3Encoder(sampleRateHz, FILE_BITRATE_KBPS, mono)
+    private val encoder = encoderFactory()
     private val transcodeThread = Thread(::runLoop, "streamy-transcode").apply { isDaemon = true; start() }
+
+    /** PCM frames dropped because the transcode thread fell behind (drop-newest policy). */
+    val droppedFrameCount: Long get() = droppedFrames.get()
 
     override fun onPcm(pcm: ShortArray) {
         if (closed.get()) return
@@ -82,10 +91,10 @@ class Mp3TranscodeSink(
 
     /** Called on the audio thread after capture stops (or on stop path). Joins the transcode thread. */
     override fun flush() {
-        // Hand the thread the end marker, then join. The thread exits after the last frame
-        // and drains encoder.flush(); every byte makes it to disk.
+        // Hand the thread the end marker (empty array — ABQ forbids null), then join. The
+        // thread exits after the last frame and drains encoder.flush(); every byte hits disk.
         if (!closed.compareAndSet(false, true)) return
-        runCatching { queue.offer(null) }
+        runCatching { queue.offer(END_MARKER) }
         runCatching { transcodeThread.join(FLUSH_JOIN_MS) }
         runCatching { out.flush() }
     }
@@ -99,7 +108,8 @@ class Mp3TranscodeSink(
     private fun runLoop() {
         try {
             while (true) {
-                val frame = queue.take() ?: break
+                val frame = queue.take()
+                if (frame.isEmpty()) break               // flush end-marker
                 for (f in encoder.encode(frame)) out.write(f)
             }
             for (f in encoder.flush()) out.write(f)
@@ -117,6 +127,8 @@ class Mp3TranscodeSink(
         private const val FLUSH_JOIN_MS = 1_000L
         // File is always a clean 128 kbps MP3 — independent of the (possibly low) live bitrate.
         private const val FILE_BITRATE_KBPS = 128
+        /** Empty array = end-of-stream sentinel (ArrayBlockingQueue forbids null). */
+        private val END_MARKER = ShortArray(0)
     }
 }
 

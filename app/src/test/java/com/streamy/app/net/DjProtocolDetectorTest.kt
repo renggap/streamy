@@ -81,6 +81,52 @@ class DjProtocolDetectorTest {
         )
     }
 
+    /** Cache semantics: a successful detection is reused across calls (no re-probe / re-write of
+     *  the 16-byte nudge), and invalidate() forces the next call to probe again. This is the
+     *  reconnect hardening from the review — a flapping connection must not re-sniff on every retry. */
+    @Test fun detection_is_cached_until_invalidate() {
+        var connects = 0
+        withServer(
+            handle = { sock ->
+                connects++
+                val head = firstBytes(sock, 2)
+                if (isUltravoxMagic(head)) {
+                    val hdr = readN(sock.getInputStream(), 4)
+                    val len = ((hdr[2].toInt() and 0xFF) shl 8) or (hdr[3].toInt() and 0xFF)
+                    readN(sock.getInputStream(), len)
+                    readN(sock.getInputStream(), 1)
+                    writeFrame(sock, "ACK:foobar\u0000")
+                } else {
+                    sock.close()
+                }
+            },
+            after = { port ->
+                DjProtocolDetector.invalidate("127.0.0.1", port)
+                // First call probes (Ultravox ACK) and caches.
+                assertThat(DjProtocolDetector.detect("127.0.0.1", port, "/", "u", "p"))
+                    .isEqualTo(DjProtocol.ULTRAVOX)
+                val connectsAfterFirst = connects
+                // Cached: repeated calls must NOT re-probe (zero new sockets).
+                assertThat(DjProtocolDetector.detect("127.0.0.1", port, "/", "u", "p"))
+                    .isEqualTo(DjProtocol.ULTRAVOX)
+                assertThat(DjProtocolDetector.detect("127.0.0.1", port, "/", "u", "p"))
+                    .isEqualTo(DjProtocol.ULTRAVOX)
+                assertThat(connects).isEqualTo(connectsAfterFirst)
+                // Invalidate: the next call must probe again (one new socket).
+                DjProtocolDetector.invalidate("127.0.0.1", port)
+                assertThat(DjProtocolDetector.detect("127.0.0.1", port, "/", "u", "p"))
+                    .isEqualTo(DjProtocol.ULTRAVOX)
+                assertThat(connects).isEqualTo(connectsAfterFirst + 1)
+            },
+        )
+    }
+
+    /** Invalidate for a port that was never probed is a harmless no-op (removing a missing key). */
+    @Test fun invalidate_unknown_entry_is_noop() {
+        DjProtocolDetector.invalidate("127.0.0.1", 1)
+        DjProtocolDetector.invalidate("127.0.0.1", 2)
+    }
+
     // ---- harness ----
 
     /** Accept connections in a loop and dispatch each to [handle]; then run [after] and close. */

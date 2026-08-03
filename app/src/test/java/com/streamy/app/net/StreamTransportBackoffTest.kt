@@ -60,21 +60,23 @@ class StreamTransportBackoffTest {
 
         // Attempt 1: Connecting -> (connect throws) -> Backoff(1, ms). No Reconnecting yet
         // (Reconnecting only appears on attempts >= 2). Assert at least Connecting+Backoff.
-        assertThat(h.observedStates).contains(TransportState.Connecting)
-        assertThat(h.observedStates.any { it is TransportState.Backoff && it.attempt == 1 }).isTrue()
+        val states = h.snapshot()
+        assertThat(states).contains(TransportState.Connecting)
+        assertThat(states.any { it is TransportState.Backoff && it.attempt == 1 }).isTrue()
     }
 
     @Test fun transport_gives_up_after_max_attempts_and_emits_failed() = runTransportTest { h ->
         // 9 connect failures -> Backoff(1..9); attempt 10 throws -> Failed(gave_up), loop ends.
         // Injected ladder is tiny, so all 10 attempts happen quickly.
         h.transport.start()
-        waitUntil(cond = { h.observedStates.any { it is TransportState.Failed } })
+        waitUntil(cond = { h.snapshot().any { it is TransportState.Failed } })
         val attempts = h.connectAttempts.get()
         h.transport.stop()
+        val states = h.snapshot()   // atomic read AFTER stop: coroutine is done appending
 
         assertThat(attempts).isEqualTo(10)
-        assertThat(h.observedStates.filterIsInstance<TransportState.Backoff>().size).isEqualTo(9)
-        assertThat(h.observedStates.last()).isEqualTo(TransportState.Failed("gave_up after 10 attempts"))
+        assertThat(states.filterIsInstance<TransportState.Backoff>().size).isEqualTo(9)
+        assertThat(states.last()).isEqualTo(TransportState.Failed("gave_up after 10 attempts"))
     }
 
     @Test fun stop_during_backoff_ends_loop_immediately() {
@@ -92,7 +94,7 @@ class StreamTransportBackoffTest {
             backoffMs = { 60_000L },  // would hang the test if stop() didn't cancel the delay
         )
         longLadder.start()
-        waitUntil(cond = { observed.any { it is TransportState.Backoff } })
+        waitUntil(cond = { synchronized(observed) { observed.any { it is TransportState.Backoff } } })
         longLadder.stop()
 
         // The transport coroutine is a child of `parent`. Cancelling it (via stop()) removes
@@ -100,13 +102,70 @@ class StreamTransportBackoffTest {
         // in delay(60s) and remain a child. `children` is a live view — poll it.
         waitUntil(cond = { !parent.children.iterator().hasNext() }, timeoutMs = 2_000)
         assertThat(attempts.get()).isEqualTo(1)  // no reconnect after stop
-        assertThat(observed.filterIsInstance<TransportState.Backoff>()).hasSize(1)
+        val states = synchronized(observed) { observed.toList() }
+        assertThat(states.filterIsInstance<TransportState.Backoff>()).hasSize(1)
         ownScope.cancel()
     }
 
     @Test fun gives_up_after_max_attempts() {
         assertThat(StreamTransport.shouldGiveUp(attempt = 10)).isTrue()
         assertThat(StreamTransport.shouldGiveUp(attempt = 9)).isFalse()
+    }
+
+    /** Producer-side teardown race: the audio thread may enqueue a frame after stop() latches
+     *  (queue closed). That enqueue must NOT emit a spurious Backpressure state that could
+     *  overwrite the terminal Idle/Error the UI already saw — same latch-and-suppress pattern
+     *  the mic-busy path uses in StreamService. */
+    @Test fun enqueue_after_stop_is_suppressed_not_backpressure() = runTransportTest { h ->
+        h.transport.start()
+        waitUntil(cond = { h.observedStates.any { it is TransportState.Backoff } })
+        h.transport.stop()
+        val dropsBefore = h.transport.droppedFrames
+        // Queue is closed now. Enqueue exactly like the audio thread would on a late frame.
+        repeat(5) { h.transport.enqueue(ByteArray(16)) }
+        Thread.sleep(100)  // give the transport coroutine a beat to observe the enqueue path
+        assertThat(h.snapshot().filterIsInstance<TransportState.Backpressure>()).isEmpty()
+        // Phantom frames must not pollute the session drop metric either.
+        assertThat(h.transport.droppedFrames).isEqualTo(dropsBefore)
+    }
+
+    /**
+     * Mic-busy / teardown race (service-level analog): a terminal Error("mic_busy") is set by
+     * the audio thread, then stop() latches. Any late transport state — a Backoff report from
+     * an in-flight reconnect, or a Connect failure's Failed — must NOT appear after the latch,
+     * exactly like the service's `if (shuttingDown) return@StreamTransport` gate. Here we
+     * simulate it directly on the transport: after stop(), a connect that would emit Failed
+     * must not fire.
+     */
+    @Test fun no_terminal_state_after_stop() {
+        val parent = Job()
+        val ownScope = CoroutineScope(parent + Dispatchers.Default)
+        val observed = java.util.Collections.synchronizedList(mutableListOf<TransportState>())
+        val connectFail = java.util.concurrent.atomic.AtomicBoolean(true)
+        val t = StreamTransport(
+            scope = ownScope,
+            // First attempt fails (-> Backoff), second attempt (post-stop) ALSO fails and would
+            // emit Failed("gave_up") if the gate weren't active. backoffMs is tiny so the loop
+            // reaches the second attempt quickly.
+            connect = {
+                if (connectFail.get()) throw java.io.IOException("fail (test)")
+                // success would emit Live — never reached in this test
+            },
+            send = { },
+            onState = { s -> observed.add(s) },
+            backoffMs = { 5L },
+        )
+        t.start()
+        waitUntil(cond = { observed.any { it is TransportState.Backoff } })
+        t.stop()          // latch: no further states allowed
+        connectFail.set(false)  // second attempt would now succeed and emit Live — must be suppressed
+        Thread.sleep(100)       // give the loop a beat; if the gate is broken, Live appears
+        val states = synchronized(observed) { observed.toList() }
+
+        assertThat(states.filterIsInstance<TransportState.Live>()).isEmpty()
+        assertThat(states.filterIsInstance<TransportState.Failed>()).isEmpty()
+        assertThat(states.any { it is TransportState.Backoff }).isTrue()
+        ownScope.cancel()
     }
 
     // ---- Test harness: a real transport on a tiny injected delay ladder ----
@@ -121,6 +180,10 @@ class StreamTransportBackoffTest {
         val sleepLog = java.util.Collections.synchronizedList(mutableListOf<Long>())
         @Volatile var lastReportedBackoffMs: Long? = null
         val connectAttempts = java.util.concurrent.atomic.AtomicInteger(0)
+
+        /** Atomic snapshot: iterating a synchronizedList must hold its mutex, or a concurrent
+         *  append from the transport coroutine can throw CME / NoSuchElementException. */
+        fun snapshot() = synchronized(observedStates) { observedStates.toList() }
         val transport: StreamTransport = StreamTransport(
             scope = scope,
             connect = {
