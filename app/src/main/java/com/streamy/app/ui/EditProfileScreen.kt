@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -77,6 +78,7 @@ fun EditProfileScreen(
     var mode by remember(profileId) { mutableStateOf(BroadcastMode.SOURCE) }
     var djUser by remember(profileId) { mutableStateOf("") }
     var djMount by remember(profileId) { mutableStateOf("/") }
+    var isAzuracast by remember(profileId) { mutableStateOf(false) }
     var codec by remember(profileId) { mutableStateOf(Codec.MP3) }
     var bitrate by remember(profileId) { mutableStateOf(128) }
     var sampleRate by remember(profileId) { mutableStateOf(44_100) }
@@ -107,6 +109,7 @@ fun EditProfileScreen(
                     .getOrDefault(BroadcastMode.SOURCE)
                 djUser = p.djUser.orEmpty()
                 djMount = p.djMount?.takeIf { it.isNotBlank() } ?: "/"
+                isAzuracast = p.djProtocol.trim().equals("ICECAST", ignoreCase = true)
                 codec = runCatching { Codec.valueOf(p.codec.trim().uppercase()) }
                     .getOrDefault(Codec.MP3)
                 bitrate = p.bitrateKbps
@@ -182,12 +185,18 @@ fun EditProfileScreen(
                 }
             }
             if (isDj) {
-                Text(
-                    "DJ mode: protocol (Ultravox/sc_trans vs Icecast/harbor) is auto-detected at " +
-                        "connect. Codec/bitrate below are uplink-only (the server re-encodes).",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.tertiary,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = isAzuracast, onCheckedChange = { isAzuracast = it })
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("AzuraCast server", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Uses Icecast DJ protocol instead of SHOUTcast Ultravox. " +
+                                "Leave unchecked for sc_trans / DNAS.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                }
                 LabeledTextField(
                     label = "DJ mount",
                     value = djMount,
@@ -332,7 +341,7 @@ fun EditProfileScreen(
                         // now flows through Ultravox 0x902 — no admin creds needed.
                         mode = mode.name,
                         djUser = if (isDj) djUser.trim() else null,
-                        djProtocol = DjProtocol.AUTO.name,
+                        djProtocol = if (isDj && isAzuracast) DjProtocol.ICECAST.name else DjProtocol.ULTRAVOX.name,
                         djMount = if (isDj) djMount.trim().ifBlank { "/" } else null,
                     )
                     vm.saveProfile(entity) { onBack() }

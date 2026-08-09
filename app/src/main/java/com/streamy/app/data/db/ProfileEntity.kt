@@ -21,6 +21,6 @@ data class ProfileEntity(
     val mode: String = "SOURCE",       // "SOURCE" (DNAS) | "DJ" (sc_trans djport2 / Icecast harbor)
     val djUser: String? = null,        // sc_trans djlogin (UID) OR Icecast HTTP-Basic user; DJ only
     val djPort: Int? = null,           // DJ port (sc_trans djport2 / harbor); null → uses [port]
-    val djProtocol: String = "AUTO",   // DJ sub-protocol: AUTO | ULTRAVOX | ICECAST
+    val djProtocol: String = "ULTRAVOX",   // DJ sub-protocol: ULTRAVOX (sc_trans) | ICECAST (AzuraCast/Icecast)
     val djMount: String? = null,       // Icecast/harbor mount (e.g. "/"); required for ICECAST
 )

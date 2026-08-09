@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [ProfileEntity::class], version = 4, exportSchema = false)
+@Database(entities = [ProfileEntity::class], version = 5, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
 
@@ -35,13 +35,24 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * v3 → v4: DJ sub-protocol + Icecast mount. djProtocol defaults AUTO; djMount nullable.
-         * Existing DJ rows (ULTRAVOX/sc_trans) keep working under AUTO, which sniffs at connect.
+         * v3 → v4: DJ sub-protocol + Icecast mount. djProtocol defaulted to AUTO; djMount nullable.
+         * (AUTO and its connect-time sniff were retired in v4 → v5 — see [MIGRATION_4_5].)
          */
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE profiles ADD COLUMN djProtocol TEXT NOT NULL DEFAULT 'AUTO'")
                 db.execSQL("ALTER TABLE profiles ADD COLUMN djMount TEXT")
+            }
+        }
+
+        /**
+         * v4 → v5: retire AUTO DJ-protocol sniff. Normalize any AUTO (or null) rows to ULTRAVOX
+         * so they keep working under the explicit protocol model. No schema change — the column
+         * already exists from v3→v4.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("UPDATE profiles SET djProtocol='ULTRAVOX' WHERE djProtocol='AUTO' OR djProtocol IS NULL")
             }
         }
     }

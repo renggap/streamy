@@ -11,10 +11,18 @@ enum class BroadcastMode { SOURCE, DJ }
 
 /**
  * DJ sub-protocol (only meaningful when [BroadcastMode] is DJ). ULTRAVOX = sc_trans / sc_serv
- * (binary Ultravox, djlogin in the auth UID). ICECAST = Icecast / Liquidsoap harbor HTTP source
- * (`SOURCE <mount> ICE/1.0` + HTTP Basic auth). AUTO = sniff at connect time ([DjProtocolDetector]).
+ * (binary Ultravox, djlogin in the auth UID). ICECAST = Icecast / AzuraCast / Liquidsoap harbor
+ * HTTP source (`SOURCE <mount> ICE/1.0` + HTTP Basic auth). Selected explicitly per profile.
  */
-enum class DjProtocol { AUTO, ULTRAVOX, ICECAST }
+enum class DjProtocol {
+    ULTRAVOX, ICECAST;
+
+    companion object {
+        /** Parse a stored value; any unrecognized/blank/legacy-AUTO string → [ULTRAVOX] (the default). */
+        fun parse(s: String): DjProtocol =
+            runCatching { valueOf(s.trim().uppercase()) }.getOrDefault(ULTRAVOX)
+    }
+}
 
 /** Bitrate + sample-rate + channels resolved for an encode session. */
 data class AudioConfig(
