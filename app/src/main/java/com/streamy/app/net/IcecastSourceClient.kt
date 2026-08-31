@@ -1,5 +1,6 @@
 package com.streamy.app.net
 
+import android.util.Base64
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -7,7 +8,6 @@ import java.net.HttpURLConnection
 import java.net.Socket
 import java.net.URL
 import java.net.URLEncoder
-import java.util.Base64
 
 /**
  * Icecast / Liquidsoap-harbor **HTTP source** client — the second DJ sub-mode (the first being
@@ -45,7 +45,9 @@ class IcecastSourceClient(
         }
         try {
             val raw = s.getOutputStream()
-            val auth = Base64.getEncoder().encodeToString("$user:$password".toByteArray(Charsets.US_ASCII))
+            // android.util.Base64 (API 1+), NOT java.util.Base64 (API 26+; minSdk is 24).
+            // NO_WRAP: without it Android inserts a newline every 76 chars, breaking the header.
+            val auth = Base64.encodeToString("$user:$password".toByteArray(Charsets.US_ASCII), Base64.NO_WRAP)
             // Header values are user-controlled (profile name/mount): strip CR/LF + NUL so a
             // malicious name can't inject extra header lines, and truncate to the wire cap.
             val safeMount = WireSafety.headerValue(mount)
@@ -114,7 +116,7 @@ class IcecastSourceClient(
             "&song=" + URLEncoder.encode(title, "UTF-8")
         val conn = (URL("http://$host:$port/admin/metadata?$q").openConnection() as HttpURLConnection).apply {
             connectTimeout = 3_000; readTimeout = 3_000
-            val auth = Base64.getEncoder().encodeToString("$user:$password".toByteArray(Charsets.US_ASCII))
+            val auth = Base64.encodeToString("$user:$password".toByteArray(Charsets.US_ASCII), Base64.NO_WRAP)
             setRequestProperty("Authorization", "Basic $auth")
         }
         try {
