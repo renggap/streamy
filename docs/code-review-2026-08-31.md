@@ -10,12 +10,15 @@ Prior review: `code-review-2026-08-03.md` (16 findings, all fixed).
 | `./gradlew :app:testDebugUnitTest` (clean `--rerun-tasks`) | **58 tests, 0 failures, 0 errors**, 5 env-gated skipped |
 | `./gradlew :app:assembleDebug` | BUILD SUCCESSFUL (LAME NDK build included) |
 | `./gradlew :app:assembleRelease` + `lintVitalRelease` | BUILD SUCCESSFUL (`app-release-unsigned.apk`, 7.7 MB) |
+| `./gradlew :app:lintDebug` | 4 errors found → **all fixed** (see finding 4); re-run clean, 39 warnings (Compose correctness advisories, `UseTomlInstead`) |
 | E2E `IcecastSourceClientLiveTest` vs az1.radioislam.my.id:8035 | **PASSED** — SOURCE handshake 2xx, 40 KB audio accepted |
 | E2E `UvoxClientLiveTest` vs az1.radioislam.my.id:8030 | Blocked: server NAK `Stream In Use` (mount on-air, 183 listener hits; `STREAMSTATUS=1` re-verified 3× over 15 min). AAC fixture generated at `/tmp/uvox.aac` for a future run. Not retried against the live station. |
 | androidTest tier (instrumented) | Not runnable: no `/dev/kvm`, no adb device on this host |
 | Repo hygiene | `docs/lame-4.0.tar.gz` + `graphify-out/` gitignored (commit `383e66a`); tree clean |
 
-## Findings fixed (commit `d25dbd6`)
+## Findings fixed
+
+Commit `d25dbd6`:
 
 1. **`WireSafety.truncate` split surrogate pairs** (P2) — `take(max)` could emit a lone
    surrogate into UTF-8 wire payloads (Ultravox 0x902 XML, ICY StreamTitle). Now backs off
@@ -27,6 +30,13 @@ Prior review: `code-review-2026-08-03.md` (16 findings, all fixed).
 3. **`StreamyViewModel.setBitrate` comment vs behavior** (P3) — the KDoc claimed callers
    surface `require()` failures as user messages; in reality no caller catches. Chooser
    feeds only ladder values, so the comment now states the real invariant.
+
+Commit `894d852` (found by `lintDebug`, invisible to JVM tests and desktop-JVM live E2E):
+
+4. **`java.util.Base64` on minSdk 24** (P1 — crash on API 24/25 devices) —
+   `IcecastSourceClient` used `java.util.Base64` (API 26+). Android 7.x devices would
+   throw `NoClassDefFoundError` on Icecast DJ connect. Switched to `android.util.Base64`
+   with `NO_WRAP` (Android's default line-wrapping at 76 chars would corrupt the header).
 
 ## Reviewed, deliberately not changed (existing `ponytail:` markers track them)
 
