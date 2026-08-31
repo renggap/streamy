@@ -132,8 +132,17 @@ class UvoxClient(
     private fun wrapAdts(au: ByteArray): ByteArray = adtsHeader(au, sampleRateHz / 2, channels)
 
     override fun close() {
-        runCatching { if (out != null) out!!.write(message(1, 0x005, ByteArray(0))) } // Terminate
-        runCatching { out?.flush() }
+        // Terminated is best-effort: if the peer died without ACKing the close (half-open TCP),
+        // the write can block in kernel retransmit for minutes. Daemon thread + join cap keeps
+        // teardown (stopAndShutdown runs on the main thread) bounded; a stuck close can't ANR.
+        val sendThread = Thread {
+            runCatching { if (out != null) out!!.write(message(1, 0x005, ByteArray(0))) } // Terminate
+            runCatching { out?.flush() }
+        }
+        sendThread.isDaemon = true
+        sendThread.start()
+        try { sendThread.join(CLOSE_JOIN_MS) } catch (_: InterruptedException) {}
+        sendThread.interrupt() // no-op for a blocked socket write; releases nothing but is harmless
         runCatching { socket?.close() }
         socket = null; out = null
     }
@@ -202,6 +211,9 @@ class UvoxClient(
 
         /** Frame classifier bits — see the class doc for the layout. */
         private const val HANDSHAKE_TIMEOUT_MS = 6_000
+
+        /** Cap on close()'s best-effort Terminate write before force-closing the socket. */
+        private const val CLOSE_JOIN_MS = 500L
         private val NULL_CHAR = 0.toChar() // ASCIIZ terminator used in Ultravox payloads
         // ADTS profile field = AAC-LC base layer; carries HE-AAC backward-compatibly (see wrapAdts).
         private const val AAC_LC_PROFILE = 1

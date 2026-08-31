@@ -25,8 +25,13 @@ object WireSafety {
     fun stripControlChars(value: String): String =
         value.filter { it.code >= 0x20 && it.code != 0x7F }
 
-    /** Truncate to [max] chars without breaking surrogate pairs (safe split). */
-    fun truncate(value: String, max: Int): String = value.take(max)
+    /** Truncate to [max] chars without splitting a surrogate pair (would emit a lone surrogate). */
+    fun truncate(value: String, max: Int): String {
+        if (value.length <= max) return value
+        var end = max
+        if (Character.isHighSurrogate(value[end - 1]) && Character.isLowSurrogate(value[end])) end--
+        return value.substring(0, end)
+    }
 
     /**
      * Parse the numeric HTTP status code out of a status line like `HTTP/1.0 200 OK`.

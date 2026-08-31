@@ -254,8 +254,8 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setBitrate(kbps: Int) {
         val p = selectedProfile.value ?: return
-        // I8: reject out-of-ladder bitrates instead of silently persisting an impossible value.
-        // Throws IllegalArgumentException — callers surface it as a user message, not a silent write.
+        // Out-of-ladder values are rejected (defensive: the chooser only offers ladder values);
+        // a stray call with no profile is a no-op, never a crash from a UI event.
         val ladder = if (p.codecEnum() == Codec.AAC) AudioConfigRules.AAC_BITRATES
                      else AudioConfigRules.MP3_BITRATES
         require(kbps in ladder) { "bitrate $kbps not in ladder $ladder" }

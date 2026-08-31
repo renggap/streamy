@@ -32,6 +32,24 @@ class WireSafetyTest {
         assertThat(WireSafety.headerValue(long).length).isEqualTo(WireSafety.MAX_HEADER_VALUE)
     }
 
+    @Test fun truncate_splits_at_cap_exactly() {
+        assertThat(WireSafety.truncate("abcdef", 3)).isEqualTo("abc")
+        assertThat(WireSafety.truncate("abc", 5)).isEqualTo("abc")
+        assertThat(WireSafety.truncate("", 5)).isEmpty()
+    }
+
+    @Test fun truncate_never_splits_surrogate_pair() {
+        // Emoji = 2 chars (high+low surrogate). Cap landing between the halves must back off one
+        // char — a lone surrogate on the wire is invalid UTF-16 and corrupts the payload.
+        val s = "abc\ud83d\ude00" + "y".repeat(10) // 3 ascii + emoji(pair at 3..4) + 10 ascii
+        val out = WireSafety.truncate(s, 4)
+        assertThat(out).isEqualTo("abc")              // pair doesn't fit — dropped whole
+        assertThat(Character.isHighSurrogate(out.last())).isFalse()
+
+        val out2 = WireSafety.truncate(s, 5)
+        assertThat(out2).isEqualTo("abc\ud83d\ude00") // cap includes the full pair
+    }
+
     @Test fun stripControlChars_keeps_utf8_content() {
         val s = "DJ \u00e9\u00e8 Titel\r\n"
         val out = WireSafety.stripControlChars(s)
