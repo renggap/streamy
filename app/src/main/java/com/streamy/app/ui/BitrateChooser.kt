@@ -212,7 +212,7 @@ private fun <T> DropdownField(
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+internal fun SectionLabel(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.labelMedium,

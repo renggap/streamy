@@ -14,6 +14,7 @@ import com.streamy.app.data.Codec
 import com.streamy.app.data.db.AppDatabase
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.data.ProfileRepository
+import com.streamy.app.service.RecordState
 import com.streamy.app.service.ServiceController
 import com.streamy.app.service.StreamState
 import kotlinx.coroutines.Dispatchers
@@ -88,6 +89,13 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
     private val _recordingPath = MutableStateFlow<String?>(null)
     val recordingPath: StateFlow<String?> = _recordingPath.asStateFlow()
+
+    // Standalone recorder (RecordService) — independent of the stream. Idle = not running.
+    private val _recordState = MutableStateFlow<RecordState>(RecordState.Idle)
+    val recordState: StateFlow<RecordState> = _recordState.asStateFlow()
+    val isRecorderActive: StateFlow<Boolean> =
+        _recordState.map { it !is RecordState.Idle }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     /**
      * Snapshot of the selected profile captured at the moment [start] was last invoked.
@@ -203,6 +211,9 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Profile id awaiting permission grant to start. Cleared on grant or abort. */
     private var pendingStartProfileId: Long? = null
+
+    /** True when the pending permission grant was for the standalone recorder, not the stream. */
+    private var pendingStartIsRecorder = false
 
     // ---- Selection ----
 
@@ -351,6 +362,39 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Toggle the STANDALONE recorder — works whether or not a stream is running. Uses the
+     * selected profile for encode config (codec/bitrate/rate), like the stream does.
+     * Mic permission is required (recording captures the mic); routes through the same
+     * permission flow as start() when a grant is needed.
+     */
+    fun toggleStandaloneRecording() {
+        val ctx = getApplication<Application>()
+        if (recordState.value is RecordState.Recording) {
+            ServiceController.stopRecording(ctx)
+            return
+        }
+        val profileId = _selectedProfileId.value
+        if (profileId == null) {
+            _userMessage.value = "Select a profile first (recorder uses its audio config)"
+            return
+        }
+        val needed = missingPermissions(ctx)
+        if (needed.isNotEmpty()) {
+            pendingStartProfileId = profileId
+            pendingStartIsRecorder = true
+            _permissionsNeeded.value = needed
+            return
+        }
+        _startDeviceName.value = _selectedDeviceName.value
+        ServiceController.startRecording(ctx, profileId, _selectedDeviceName.value)
+    }
+
+    /** ServiceConnection pushes the bound RecordService state in here. */
+    fun onRecordStateChanged(state: RecordState) {
+        _recordState.value = state
+    }
+
+    /**
      * Push now-playing metadata via Ultravox 0x902 (admin-free) on the running stream.
      * Routes through [ServiceController] -> [StreamService.ACTION_META] -> [UvoxClient.updateNowPlaying].
      */
@@ -366,14 +410,21 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     fun onPermissionsResult(results: Map<String, Boolean>) {
         _permissionsNeeded.value = emptyList()
         val id = pendingStartProfileId
+        val forRecorder = pendingStartIsRecorder
         pendingStartProfileId = null
+        pendingStartIsRecorder = false
         if (id == null) return
         if (results.values.all { it }) {
-            _startSnapshot.value = selectedProfile.value
-            _startDeviceName.value = _selectedDeviceName.value
-            ServiceController.start(getApplication(), id, _selectedDeviceName.value)
+            if (forRecorder) {
+                _startDeviceName.value = _selectedDeviceName.value
+                ServiceController.startRecording(getApplication(), id, _selectedDeviceName.value)
+            } else {
+                _startSnapshot.value = selectedProfile.value
+                _startDeviceName.value = _selectedDeviceName.value
+                ServiceController.start(getApplication(), id, _selectedDeviceName.value)
+            }
         } else {
-            _userMessage.value = "Microphone permission required to broadcast"
+            _userMessage.value = "Microphone permission required"
         }
     }
 

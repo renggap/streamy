@@ -3,33 +3,44 @@ package com.streamy.app.audio
 import com.streamy.app.net.StreamTransport
 
 /**
- * Glues [AudioCapture] -> [Encoder] -> [StreamTransport]. Runs entirely on the audio
- * capture thread (the `streamy-audio` HandlerThread inside AudioCapture); no offloading.
+ * Glues [AudioCapture] -> [Encoder] -> [StreamTransport] and/or a [StreamSink].
+ * Runs entirely on the audio capture thread (the `streamy-audio` HandlerThread inside
+ * AudioCapture); no offloading.
+ *
+ * Two modes:
+ *  - Broadcast ([transport] non-null): encoded frames go to the transport; an optional
+ *    sink taps the same audio for a local recording (armed later via [armRecord]).
+ *  - Record-only ([transport] null, [sink] pre-armed): standalone recorder — mic → encode
+ *    → file, no network. Frames still flow through the encoder so the file is a real
+ *    MP3 (transcode) or the encoded stream itself (direct).
  *
  * Mic-busy detection: [AudioCapture] surfaces mic contention only as persistent short/zero
  * reads (another app grabbed the mic). We count consecutive short reads and fire [onMicBusy]
  * once the run exceeds [SHORT_READ_LIMIT], then stop capture.
  *
- * Optional [StreamSink] (local MP3 recording): [armRecord] / [disarmRecord] only flip volatiles
- * here; the audio thread swaps the sink in and flushes+closes it at frame boundaries, because the
- * transcode sink owns a LAME [Mp3Encoder] that is not thread-safe and may only be touched from the
- * audio thread. The sink itself is built off-thread by the caller (file + encoder init = slow).
+ * The record sink is swapped in and flushed+closed at frame boundaries on the audio thread,
+ * because the transcode sink owns a LAME [Mp3Encoder] that is not thread-safe and may only
+ * be touched from the audio thread. A sink passed via [sink] is armed from the first frame.
  *
- * Not thread-safe beyond the single audio thread. The caller (StreamService) owns lifecycle
- * ordering: start pipeline, then start transport drain; on stop, flush pipeline (enqueues
- * trailing frames) BEFORE stopping the transport so the drain loop emits them.
+ * Not thread-safe beyond the single audio thread. The caller (StreamService / RecordService)
+ * owns lifecycle ordering: on stop, flush pipeline (draining trailing frames) BEFORE
+ * stopping any transport so the drain loop emits them.
  */
 class AudioPipeline(
     private val capture: AudioCapture,
     private val encoder: Encoder,
-    private val transport: StreamTransport,
+    /** Null = record-only mode (standalone recorder). */
+    private val transport: StreamTransport? = null,
+    /** Pre-armed sink for record-only mode; null in broadcast mode (use [armRecord]). */
+    private val sink: StreamSink? = null,
     private val onMicBusy: () -> Unit,
     private val levelFeed: LevelFeed? = null,
 ) {
     private var consecutiveShortReads = 0
 
     // Record sink state. Read on the audio thread; written (under lock) from the binder thread.
-    @Volatile private var activeSink: StreamSink? = null
+    // In record-only mode activeSink is the constructor [sink] (immutable; no swap path used).
+    @Volatile private var activeSink: StreamSink? = sink
     @Volatile private var pendingSink: StreamSink? = null
     @Volatile private var stopRequested = false
 
@@ -52,7 +63,7 @@ class AudioPipeline(
                 consecutiveShortReads = 0
             }
             val frames = encoder.encode(pcm)
-            for (frame in frames) transport.enqueue(frame)
+            transport?.enqueueAll(frames)
             // Local recording: offer BOTH sides; each sink consumes what it needs (no-op the rest).
             activeSink?.let { sink ->
                 sink.onPcm(pcm)
@@ -68,11 +79,11 @@ class AudioPipeline(
     }
 
     /** Arm local recording. [sink] must already be built (encoder init done off the audio thread). */
-    @Synchronized fun armRecord(sink: StreamSink) {
+    @Synchronized fun armRecord(newSink: StreamSink) {
         // If a previous arm is still pending (audio thread hasn't swapped it in), close it so a
         // rapid double-arm can't leak a FileOutputStream + native LAME handle.
         pendingSink?.let { runCatching { it.flush(); it.close() } }
-        pendingSink = sink
+        pendingSink = newSink
         stopRequested = false
     }
 
@@ -89,7 +100,13 @@ class AudioPipeline(
      *  the capture thread has exited.) */
     fun stop() {
         capture.stop()
-        for (frame in encoder.flush()) transport.enqueue(frame)
+        transport?.let { t -> for (frame in encoder.flush()) t.enqueue(frame) }
+        // In record-only mode the trailing encoder output belongs to the FILE: flush into the
+        // sink's onEncoded before closing, or the last ~1s of audio is lost. Broadcast mode's
+        // trailing frames go to the transport instead (above).
+        if (transport == null) {
+            activeSink?.let { s -> runCatching { s.onEncoded(encoder.flush()) } }
+        }
         // Close BOTH sinks — the audio thread has exited (capture.stop joined it), so this is the
         // sole accessor. pendingSink may hold an armed-but-not-yet-promoted sink if stop arrived
         // within one audio frame of arm; dropping it without closing would leak the fd + LAME.
@@ -98,6 +115,10 @@ class AudioPipeline(
         pendingSink = null
         stopRequested = false
         toClose.forEach { runCatching { it.flush(); it.close() } }
+    }
+
+    private fun StreamTransport.enqueueAll(frames: List<ByteArray>) {
+        for (f in frames) enqueue(f)
     }
 
     companion object {

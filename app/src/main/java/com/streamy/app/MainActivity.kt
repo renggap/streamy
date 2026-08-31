@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.streamy.app.service.RecordService
+import com.streamy.app.service.RecordState
 import com.streamy.app.service.ServiceController
 import com.streamy.app.service.StreamService
 import com.streamy.app.service.StreamState
@@ -82,6 +84,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val recordServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val s = (binder as? RecordService.LocalBinder)?.service ?: return
+            lifecycleScope.launch { s.state.collect { vm.onRecordStateChanged(it) } }
+            lifecycleScope.launch { vm.micGain.collect { s.setMicGain(it) } }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            vm.onRecordStateChanged(RecordState.Idle)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Edge-to-edge so the themed Surface fills behind the status/nav bars; content is then
@@ -91,6 +105,7 @@ class MainActivity : ComponentActivity() {
         // Bind early so the VM mirrors service state as soon as the binder is up. Service
         // binds to itself; if not already started this creates an idle instance (no broadcast).
         ServiceController.bind(this, serviceConnection)
+        ServiceController.bindRecord(this, recordServiceConnection)
 
         setContent {
             StreamyTheme {
@@ -114,5 +129,6 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         runCatching { unbindService(serviceConnection) }
+        runCatching { unbindService(recordServiceConnection) }
     }
 }

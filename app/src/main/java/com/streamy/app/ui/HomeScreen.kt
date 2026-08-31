@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.streamy.app.data.db.ProfileEntity
+import com.streamy.app.service.RecordState
 import com.streamy.app.service.StreamState
 import kotlin.math.roundToInt
 
@@ -81,6 +82,7 @@ fun HomeScreen(
     val micGain by vm.micGain.collectAsStateWithLifecycle()
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
     val recordingPath by vm.recordingPath.collectAsStateWithLifecycle()
+    val recordState by vm.recordState.collectAsStateWithLifecycle()
 
     var nowPlaying by rememberSaveable { mutableStateOf("") }
 
@@ -134,10 +136,13 @@ fun HomeScreen(
             MicVolumeSlider(gain = micGain, onChange = vm::setMicGain)
 
             RecordControl(
-                isLive = isLive,
+                state = state,
+                recordState = recordState,
                 isRecording = isRecording,
                 recordingPath = recordingPath,
-                onToggle = vm::toggleRecording,
+                hasProfile = hasProfile,
+                onToggleRecorder = vm::toggleStandaloneRecording,
+                onToggleLiveRecording = vm::toggleRecording,
             )
 
             if (needsRestart) {
@@ -197,16 +202,10 @@ private fun Masthead() {
 @Composable
 private fun StatePill(state: StreamState) {
     val (label, tone) = state.toPill()
-    val bgColor = when (tone) {
+    val dotColor = when (tone) {
         PillTone.Live -> MaterialTheme.colorScheme.secondary
         PillTone.Busy -> MaterialTheme.colorScheme.tertiary
         PillTone.Error -> MaterialTheme.colorScheme.primary
-        PillTone.Idle -> MaterialTheme.colorScheme.surfaceVariant
-    }
-    val fgColor = when (tone) {
-        PillTone.Live -> MaterialTheme.colorScheme.onSecondary
-        PillTone.Busy -> MaterialTheme.colorScheme.onTertiary
-        PillTone.Error -> MaterialTheme.colorScheme.onPrimary
         PillTone.Idle -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -231,22 +230,28 @@ private fun StatePill(state: StreamState) {
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
-            .background(bgColor, RoundedCornerShape(2.dp))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant,
+                RoundedCornerShape(50),
+            )
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
         Box(
             Modifier
-                .size(10.dp)
+                .size(8.dp)
                 .alpha(pulseAlpha)
-                .background(fgColor, androidx.compose.foundation.shape.CircleShape),
+                .background(dotColor, androidx.compose.foundation.shape.CircleShape),
         )
         Text(
             label,
             style = MaterialTheme.typography.labelLarge,
-            color = fgColor,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (tone == PillTone.Busy) {
+            JokoPulseRing(dotColor, size = 12.dp)
+        }
     }
 }
 
@@ -482,7 +487,7 @@ private fun NowPlayingSection(
     }
 }
 
-// ---- Hint banner ----
+// ---- Hint banner (jokoui Alert structure: soft tinted fill + 1dp tinted border + dot) ----
 
 private enum class HintTone { Warn }
 
@@ -491,22 +496,7 @@ private fun Hint(text: String, tone: HintTone) {
     val color = when (tone) {
         HintTone.Warn -> MaterialTheme.colorScheme.tertiary
     }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(color.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
-            .border(width = 1.dp, color = color.copy(alpha = 0.4f), shape = RoundedCornerShape(4.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-    ) {
-        Box(
-            Modifier
-                .size(8.dp)
-                .background(color, androidx.compose.foundation.shape.CircleShape),
-        )
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = color)
-    }
+    JokoAlert(text = text, color = color)
 }
 
 // ---- Mic volume (software gain) ----
@@ -540,43 +530,70 @@ private fun MicVolumeSlider(gain: Float, onChange: (Float) -> Unit) {
     }
 }
 
-// ---- Local MP3 recording toggle ----
+// ---- Local MP3 recording ----
+//
+// Two recording paths, one control surface:
+//  - Standalone recorder (RecordService): mic → MP3 file, NO stream needed. Works when Idle.
+//    Runs alongside a live broadcast if the user wants both.
+//  - Stream recording (StreamService): taps the running broadcast — only when Live.
 
 @Composable
 private fun RecordControl(
-    isLive: Boolean,
+    state: StreamState,
+    recordState: RecordState,
     isRecording: Boolean,
     recordingPath: String?,
-    onToggle: () -> Unit,
+    hasProfile: Boolean,
+    onToggleRecorder: () -> Unit,
+    onToggleLiveRecording: () -> Unit,
 ) {
+    val isLive = state is StreamState.Live
+    val recorderActive = recordState is RecordState.Recording
+    val recorderError = recordState as? RecordState.Error
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(
-            onClick = onToggle,
-            enabled = isLive,
-            shape = RoundedCornerShape(4.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (isRecording) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = if (isRecording) MaterialTheme.colorScheme.onPrimary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            ),
-            contentPadding = PaddingValues(vertical = 14.dp),
-            modifier = Modifier.fillMaxWidth(),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                if (isRecording) "STOP RECORDING" else "RECORD MP3",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 2.sp,
+            SectionLabel("RECORDER")
+            if (recorderActive) {
+                JokoSoftBadge("RECORDING", MaterialTheme.colorScheme.primary)
+            } else if (isRecording) {
+                JokoSoftBadge("TAPPING STREAM", MaterialTheme.colorScheme.primary)
+            }
+        }
+        // Standalone recorder: primary action, available whether Idle or Live (records in
+        // parallel with a broadcast). Needs a profile for the encode config.
+        JokoPrimaryButton(
+            text = if (recorderActive) "STOP RECORDING" else "RECORD MP3",
+            onClick = onToggleRecorder,
+            enabled = hasProfile,
+            container = if (recorderActive) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+            modifier = Modifier.fillMaxWidth(),
+            verticalPadding = 14.dp,
+        )
+        if (isLive) {
+            // While Live, offer the stream tap (encoded frames as-is / transcode) too.
+            JokoOutlineButton(
+                text = if (isRecording) "STOP STREAM RECORDING" else "RECORD THIS STREAM",
+                onClick = onToggleLiveRecording,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
-        if (recordingPath != null) {
+        val activePath = (recordState as? RecordState.Recording)?.path ?: recordingPath
+        if (activePath != null) {
             Text(
-                "Saving to: $recordingPath",
+                "Saving to: $activePath",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (recorderError != null) {
+            JokoAlert(
+                text = "Recorder error: ${recorderError.reason.humanize().lowercase()}",
+                color = MaterialTheme.colorScheme.primary,
             )
         }
     }

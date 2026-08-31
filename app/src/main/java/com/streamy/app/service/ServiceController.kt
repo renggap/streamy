@@ -54,10 +54,38 @@ object ServiceController {
         context.startService(intent)
     }
 
+    /** Start the standalone recorder (independent of streaming). Foreground-service safe. */
+    fun startRecording(context: Context, profileId: Long, deviceName: String? = null) {
+        val intent = Intent(context, RecordService::class.java).apply {
+            action = RecordService.ACTION_START
+            putExtra(RecordService.EXTRA_PROFILE_ID, profileId)
+            deviceName?.let { putExtra(RecordService.EXTRA_DEVICE_NAME, it) }
+        }
+        ContextCompat.startForegroundService(context, intent)
+    }
+
+    /** Stop the standalone recorder. */
+    fun stopRecording(context: Context) {
+        val intent = Intent(context, RecordService::class.java).apply {
+            action = RecordService.ACTION_STOP
+        }
+        ContextCompat.startForegroundService(context, intent)
+    }
+
     /** Convenience for binders; UI owns the [ServiceConnection] lifecycle. */
     fun bind(context: Context, conn: ServiceConnection) {
         context.bindService(
             Intent(context, StreamService::class.java),
+            conn,
+            Context.BIND_AUTO_CREATE,
+        )
+    }
+
+    /** Bind the standalone recorder so the UI mirrors its state (BIND_AUTO_CREATE keeps an
+     *  idle instance alive; recording only runs after an explicit startRecording). */
+    fun bindRecord(context: Context, conn: ServiceConnection) {
+        context.bindService(
+            Intent(context, RecordService::class.java),
             conn,
             Context.BIND_AUTO_CREATE,
         )
