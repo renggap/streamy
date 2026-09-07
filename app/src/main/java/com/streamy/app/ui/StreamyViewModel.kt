@@ -6,12 +6,12 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.room.Room
 import com.streamy.app.audio.LevelSnapshot
 import com.streamy.app.data.AudioConfig
 import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.Codec
 import com.streamy.app.data.DjProtocol
+import com.streamy.app.data.db.DatabaseHolder
 import com.streamy.app.data.db.AppDatabase
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.data.ProfileRepository
@@ -49,10 +49,8 @@ import kotlinx.coroutines.launch
  */
 class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
-    // Same db name as StreamService so profile writes are visible without a sync layer.
-    private val db: AppDatabase = Room.databaseBuilder(
-        app, AppDatabase::class.java, "streamy.db",
-    ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5).build()
+    // Single shared Room instance via DatabaseHolder — same db file as the services.
+    private val db: AppDatabase = DatabaseHolder.get(getApplication())
 
     private val repo = ProfileRepository(db.profileDao())
 
@@ -466,8 +464,7 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         super.onCleared()
-        // Close the VM-side Room handle so the SQLiteDatabase isn't left open after the VM dies.
-        runCatching { db.close() }
+        // Shared DatabaseHolder singleton is process-owned — never closed here.
     }
 
     companion object {

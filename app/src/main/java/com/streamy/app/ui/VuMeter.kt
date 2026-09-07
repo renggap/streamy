@@ -17,6 +17,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -40,7 +42,8 @@ private const val GRID_COLS = 6
 private const val DB_FLOOR = -60f
 
 @Composable
-fun VuMeter(snapshot: LevelSnapshot?, modifier: Modifier = Modifier) {
+fun VuMeter(levelsFlow: StateFlow<LevelSnapshot?>, modifier: Modifier = Modifier) {
+    val snapshot by levelsFlow.collectAsStateWithLifecycle()
     val outline = MaterialTheme.colorScheme.outline
     val outlineVariant = MaterialTheme.colorScheme.outlineVariant
     val surface = MaterialTheme.colorScheme.surface
@@ -61,7 +64,7 @@ fun VuMeter(snapshot: LevelSnapshot?, modifier: Modifier = Modifier) {
     // Afterglow: the previous non-null sample set. Held until the next snapshot arrives.
     var prevSamples by remember { mutableStateOf<FloatArray?>(null) }
     SideEffect {
-        if (snapshot != null) prevSamples = snapshot.samples
+        snapshot?.let { prevSamples = it.samples }
     }
 
     val tracePath = remember { Path() }

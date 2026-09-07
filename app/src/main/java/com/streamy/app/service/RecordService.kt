@@ -28,10 +28,9 @@ import com.streamy.app.data.AudioConfig
 import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.Codec
 import com.streamy.app.data.ProfileRepository
-import com.streamy.app.data.db.AppDatabase
+import com.streamy.app.data.db.DatabaseHolder
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.storage.RecordingStorage
-import androidx.room.Room
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -64,14 +63,7 @@ class RecordService : Service() {
     private val _state = MutableStateFlow<RecordState>(RecordState.Idle)
     val state: StateFlow<RecordState> = _state.asStateFlow()
 
-    private val db by lazy {
-        Room.databaseBuilder(this, AppDatabase::class.java, "streamy.db")
-            .addMigrations(
-                AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3,
-                AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5,
-            )
-            .build()
-    }
+    private val db by lazy { DatabaseHolder.get(this) }
 
     @Volatile private var pipeline: AudioPipeline? = null
     private var encoder: Encoder? = null
@@ -232,7 +224,6 @@ class RecordService : Service() {
 
     override fun onDestroy() {
         try { stopRecording() } catch (_: Throwable) {}
-        runCatching { db.close() }
         scope.cancel()
         super.onDestroy()
     }

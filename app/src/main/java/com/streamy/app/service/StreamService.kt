@@ -17,7 +17,6 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.room.Room
 import com.streamy.app.MainActivity
 import com.streamy.app.audio.AudioCapture
 import com.streamy.app.audio.AudioPipeline
@@ -33,7 +32,7 @@ import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.Codec
 import com.streamy.app.data.DjProtocol
 import com.streamy.app.data.ProfileRepository
-import com.streamy.app.data.db.AppDatabase
+import com.streamy.app.data.db.DatabaseHolder
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.R
 import com.streamy.app.net.IcecastSourceClient
@@ -86,11 +85,7 @@ class StreamService : Service() {
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
-    private val db by lazy {
-        Room.databaseBuilder(this, AppDatabase::class.java, "streamy.db")
-            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5)
-            .build()
-    }
+    private val db by lazy { DatabaseHolder.get(this) }
 
     private var transport: StreamTransport? = null
     @Volatile private var pipeline: AudioPipeline? = null
@@ -446,9 +441,7 @@ class StreamService : Service() {
     override fun onDestroy() {
         // Defensive: if process kill/recycle happens before ACTION_STOP, drop everything.
         try { stopAndShutdown() } catch (_: Throwable) {}
-        // Close the Room db here (not in stopAndShutdown) so it isn't re-closed on each
-        // stop/start cycle within one instance. runCatching guards the `by lazy` init.
-        runCatching { db.close() }
+        // Shared DatabaseHolder singleton is process-owned — never closed here.
         scope.cancel()
         super.onDestroy()
     }

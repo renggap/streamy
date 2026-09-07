@@ -78,7 +78,6 @@ fun HomeScreen(
     val bitrate by vm.bitrate.collectAsStateWithLifecycle()
     val sampleRate by vm.sampleRate.collectAsStateWithLifecycle()
     val mono by vm.mono.collectAsStateWithLifecycle()
-    val levels by vm.levels.collectAsStateWithLifecycle()
     val micGain by vm.micGain.collectAsStateWithLifecycle()
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
     val recordingPath by vm.recordingPath.collectAsStateWithLifecycle()
@@ -131,7 +130,7 @@ fun HomeScreen(
                 )
             }
 
-            VuMeter(snapshot = levels)
+            VuMeter(levelsFlow = vm.levels)
 
             MicVolumeSlider(gain = micGain, onChange = vm::setMicGain)
 
