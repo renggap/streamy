@@ -61,6 +61,11 @@ class StreamTransport(
         if (result.isFailure) onState(TransportState.Backpressure(drops.incrementAndGet()))
     }
 
+    /** Drop pre-reconnect backlog so live speech resumes live, not ~1.5s stale. */
+    private fun clearBacklog() {
+        while (queue.tryReceive().isSuccess) { /* drop */ }
+    }
+
     fun start() {
         job = scope.launch {
             var attempt = 0
@@ -68,6 +73,7 @@ class StreamTransport(
                 try {
                     onState(if (attempt == 0) TransportState.Connecting else TransportState.Reconnecting(attempt))
                     connect()
+                    clearBacklog()
                     onState(TransportState.Live)
                     attempt = 0
                     for (f in queue) {
