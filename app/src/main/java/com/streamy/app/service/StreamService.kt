@@ -133,6 +133,13 @@ class StreamService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == null) {
+            // System restart after process kill: no profile id to resume from.
+            // Re-promote briefly so we don't miss the FGS timeout, then stop.
+            startForegroundTyped(buildNotification("Idle"))
+            stopAndShutdown()
+            return START_STICKY
+        }
         when (intent?.action) {
             ACTION_START -> {
                 // FGS timing: promote BEFORE any blocking work. ~5s budget.
