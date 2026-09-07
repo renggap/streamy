@@ -5,6 +5,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.HttpURLConnection
+import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
 import java.net.URLEncoder
@@ -39,8 +40,9 @@ class IcecastSourceClient(
     override fun connect(bitrateKbps: Int, name: String, genre: String) {
         try { socket?.close() } catch (_: Throwable) {}
         socket = null; out = null; metaStream = null
-        val s = Socket(host, port).apply {
+        val s = Socket().apply {
             tcpNoDelay = true
+            connect(InetSocketAddress(host, port), HANDSHAKE_TIMEOUT_MS)
             soTimeout = HANDSHAKE_TIMEOUT_MS
         }
         try {

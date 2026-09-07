@@ -3,6 +3,7 @@ package com.streamy.app.net
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.InetSocketAddress
 import java.net.Socket
 
 /**
@@ -53,9 +54,10 @@ class UvoxClient(
         // Close any prior socket so a reconnect never leaks.
         try { socket?.close() } catch (_: Throwable) {}
         socket = null; out = null
-        val s = Socket(host, port).apply {
+        val s = Socket().apply {
             tcpNoDelay = true
             keepAlive = true
+            connect(InetSocketAddress(host, port), HANDSHAKE_TIMEOUT_MS)
             soTimeout = HANDSHAKE_TIMEOUT_MS
         }
         try {
