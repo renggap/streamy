@@ -19,6 +19,12 @@ class WireSafetyTest {
         assertThat(WireSafety.parseHttpStatus("HTTP/1.0 OK")).isEqualTo(-1)
     }
 
+    @Test fun parseHttpStatus_tolerates_extra_whitespace() {
+        assertThat(WireSafety.parseHttpStatus("HTTP/1.0  200  OK")).isEqualTo(200)
+        assertThat(WireSafety.parseHttpStatus("  HTTP/1.0 200 OK  ")).isEqualTo(200)
+        assertThat(WireSafety.parseHttpStatus("HTTP/1.0 2000 Broken")).isEqualTo(-1)
+    }
+
     @Test fun headerValue_strips_crlf_and_controls() {
         val clean = WireSafety.headerValue("Bad\r\nInjected: header\u0000Name")
         assertThat(clean).isEqualTo("BadInjected: headerName")

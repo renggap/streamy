@@ -39,10 +39,9 @@ object WireSafety {
      * substring — "HTTP/1.0 2000 Broken" or a body line containing "200" must NOT pass.
      */
     fun parseHttpStatus(statusLine: String): Int {
-        val parts = statusLine.trim().split(" ")
+        val parts = statusLine.trim().split(Regex("\\s+"))
         if (parts.size < 2) return -1
         val code = parts[1].toIntOrNull() ?: return -1
-        // A status code is exactly 3 digits per RFC 7230.
         return if (code in 100..999) code else -1
     }
 }
