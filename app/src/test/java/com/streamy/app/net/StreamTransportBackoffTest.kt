@@ -168,6 +168,27 @@ class StreamTransportBackoffTest {
         ownScope.cancel()
     }
 
+    @Test fun protocol_exception_fails_fast_without_retries() {
+        val parent = Job()
+        val ownScope = CoroutineScope(parent + Dispatchers.Default)
+        val observed = java.util.Collections.synchronizedList(mutableListOf<TransportState>())
+        val attempts = java.util.concurrent.atomic.AtomicInteger(0)
+        val t = StreamTransport(
+            scope = ownScope,
+            connect = { attempts.incrementAndGet(); throw ProtocolException("auth NAK: Bad password") },
+            send = { },
+            onState = { s -> observed.add(s) },
+            backoffMs = { 5L },
+        )
+        t.start()
+        val deadline = System.currentTimeMillis() + 2_000
+        while (observed.none { it is TransportState.Failed } && System.currentTimeMillis() < deadline) Thread.sleep(5)
+        t.stop()
+        assertThat(attempts.get()).isEqualTo(1)
+        assertThat(observed.last()).isInstanceOf(TransportState.Failed::class.java)
+        ownScope.cancel()
+    }
+
     // ---- Test harness: a real transport on a tiny injected delay ladder ----
 
     /** [sleepLog] records every ms value actually passed to delay(); [reportedLog] records every
