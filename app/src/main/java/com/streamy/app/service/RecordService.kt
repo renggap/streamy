@@ -159,7 +159,7 @@ class RecordService : Service() {
                         sink = sink,
                         onMicBusy = {
                             _state.value = RecordState.Error("mic_busy")
-                            stopRecording()
+                            stopRecording(preserveTerminal = true)
                         },
                         levelFeed = null,
                     )
@@ -170,7 +170,7 @@ class RecordService : Service() {
             } catch (e: Throwable) {
                 Log.e(TAG, "record start failed", e)
                 _state.value = RecordState.Error(e.message ?: "record_failed")
-                stopRecording()
+                stopRecording(preserveTerminal = true)
             }
         }
     }
@@ -188,12 +188,12 @@ class RecordService : Service() {
 
     /** Single idempotent teardown. Safe from any thread. */
     @Synchronized
-    fun stopRecording() {
+    fun stopRecording(preserveTerminal: Boolean = false) {
         if (shuttingDown) return
         shuttingDown = true
         closeOrphans()
         releaseLock()
-        _state.value = RecordState.Idle
+        _state.value = if (preserveTerminal && _state.value is RecordState.Error) _state.value else RecordState.Idle
         try {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } catch (e: Throwable) {

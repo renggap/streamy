@@ -261,7 +261,7 @@ class StreamService : Service() {
                         transport = t,
                         onMicBusy = {
                             _state.value = StreamState.Error("mic_busy")
-                            stopAndShutdown()
+                            stopAndShutdown(preserveTerminal = true)
                         },
                         levelFeed = levelFeed,
                     )
@@ -273,7 +273,7 @@ class StreamService : Service() {
             } catch (e: Throwable) {
                 Log.e(TAG, "start failed", e)
                 _state.value = StreamState.Error(e.message ?: "start_failed")
-                stopAndShutdown()
+                stopAndShutdown(preserveTerminal = true)
             }
         }
     }
@@ -400,14 +400,14 @@ class StreamService : Service() {
 
     /** Single idempotent teardown path. Safe to call from any thread. */
     @Synchronized
-    fun stopAndShutdown() {
+    fun stopAndShutdown(preserveTerminal: Boolean = false) {
         if (shuttingDown) return
         shuttingDown = true
         _isRecording.value = false
         closeOrphans()
         levelFeed.reset()
         releaseLocks()
-        _state.value = StreamState.Idle
+        _state.value = resolveTeardownState(_state.value, preserveTerminal)
         try {
             stopForeground(STOP_FOREGROUND_REMOVE)
             foregrounded = false
@@ -499,6 +499,9 @@ class StreamService : Service() {
     companion object {
         private const val TAG = "StreamService"
         private const val CHANNEL_ID = "streamy_stream"
+
+        fun resolveTeardownState(current: StreamState, preserveTerminal: Boolean): StreamState =
+            if (preserveTerminal && current is StreamState.Error) current else StreamState.Idle
 
         const val ACTION_START = "com.streamy.app.action.START"
         const val ACTION_STOP = "com.streamy.app.action.STOP"
