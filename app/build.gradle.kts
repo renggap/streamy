@@ -29,15 +29,6 @@ android {
             }
         }
 
-        // Instrumented integration test targets a real DNAS2 server. Creds come from
-        // local.properties (gitignored) via BuildConfig so secrets never enter source control.
-        val lp = Properties()
-        rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { lp.load(it) }
-        fun lp(k: String, default: String): String = lp.getProperty(k) ?: default
-        buildConfigField("String", "TEST_HOST", "\"${lp("streamy.test.host", "")}\"")
-        buildConfigField("int", "TEST_PORT", lp("streamy.test.port", "0"))
-        buildConfigField("String", "TEST_PASSWORD", "\"${lp("streamy.test.password", "")}\"")
-        buildConfigField("int", "TEST_SID", lp("streamy.test.sid", "1"))
     }
 
     externalNativeBuild {
@@ -48,6 +39,18 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Instrumented integration test targets a real DNAS2 server. Creds come from
+            // local.properties (gitignored) via BuildConfig so secrets never enter source control.
+            // Debug-only: unit tests run against debug, and connectedAndroidTest uses debug.
+            val lp = Properties()
+            rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { lp.load(it) }
+            fun lp(k: String, default: String): String = lp.getProperty(k) ?: default
+            buildConfigField("String", "TEST_HOST", "\"${lp("streamy.test.host", "")}\"")
+            buildConfigField("int", "TEST_PORT", lp("streamy.test.port", "0"))
+            buildConfigField("String", "TEST_PASSWORD", "\"${lp("streamy.test.password", "")}\"")
+            buildConfigField("int", "TEST_SID", lp("streamy.test.sid", "1"))
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
