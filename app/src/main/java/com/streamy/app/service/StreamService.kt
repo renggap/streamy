@@ -210,13 +210,19 @@ class StreamService : Service() {
                             sampleRateHz = cfg.sampleRateHz, channels = if (cfg.mono) 1 else 2,
                             djUser = profile.djUser,
                         )
-                        DjProtocol.ICECAST -> IcecastSourceClient(
-                            host = profile.host, port = djPort,
-                            mount = profile.djMount ?: "/",
-                            user = profile.djUser ?: "",
-                            password = profile.password,
-                            mime = if (cfg.codec == Codec.AAC) "audio/aacp" else "audio/mpeg",
-                        )
+                        DjProtocol.ICECAST -> {
+                            // Icecast source mounts only accept MP3 here — coerce AAC defensively
+                            // (VM + form already block it; this is the last line of defense).
+                            val iceCfg = if (cfg.codec == Codec.AAC) cfg.copy(codec = Codec.MP3) else cfg
+                            if (iceCfg !== cfg) Log.w(TAG, "AAC coerced to MP3 for Icecast mount")
+                            IcecastSourceClient(
+                                host = profile.host, port = djPort,
+                                mount = profile.djMount ?: "/",
+                                user = profile.djUser ?: "",
+                                password = profile.password,
+                                mime = if (iceCfg.codec == Codec.AAC) "audio/aacp" else "audio/mpeg",
+                            )
+                        }
                     }
                 }
 
