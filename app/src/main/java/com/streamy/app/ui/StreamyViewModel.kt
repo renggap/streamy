@@ -11,6 +11,7 @@ import com.streamy.app.audio.LevelSnapshot
 import com.streamy.app.data.AudioConfig
 import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.Codec
+import com.streamy.app.data.DjProtocol
 import com.streamy.app.data.db.AppDatabase
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.data.ProfileRepository
@@ -253,14 +254,17 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setCodec(c: Codec) {
         val p = selectedProfile.value ?: return
-        val ladder = if (c == Codec.AAC) AudioConfigRules.AAC_BITRATES else AudioConfigRules.MP3_BITRATES
+        // Icecast mounts don't accept AAC — coerce to MP3 so the persisted row stays playable.
+        val protocol = DjProtocol.parse(p.djProtocol)
+        val effectiveCodec = if (c == Codec.AAC && protocol == DjProtocol.ICECAST) Codec.MP3 else c
+        val ladder = if (effectiveCodec == Codec.AAC) AudioConfigRules.AAC_BITRATES else AudioConfigRules.MP3_BITRATES
         val newBitrate = if (p.bitrateKbps in ladder) p.bitrateKbps
         else ladder.minBy { kotlin.math.abs(it - p.bitrateKbps) }
-        val newMono = if (AudioConfigRules.needsHeAac(c, newBitrate)) true else p.mono
+        val newMono = if (AudioConfigRules.needsHeAac(effectiveCodec, newBitrate)) true else p.mono
         // MP3 16/24 kbps needs ≤ 24 kHz (MPEG-2); clamp the sample rate so the encoder actually
         // produces the requested bitrate instead of LAME bumping it (24→32).
-        val newSr = AudioConfigRules.clamp(AudioConfig(c, newBitrate, p.sampleRateHz, newMono)).sampleRateHz
-        updateProfileAudio(p.copy(codec = c.name, bitrateKbps = newBitrate, mono = newMono, sampleRateHz = newSr))
+        val newSr = AudioConfigRules.clamp(AudioConfig(effectiveCodec, newBitrate, p.sampleRateHz, newMono)).sampleRateHz
+        updateProfileAudio(p.copy(codec = effectiveCodec.name, bitrateKbps = newBitrate, mono = newMono, sampleRateHz = newSr))
     }
 
     fun setBitrate(kbps: Int) {
@@ -277,7 +281,8 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setSampleRate(hz: Int) {
         val p = selectedProfile.value ?: return
-        updateProfileAudio(p.copy(sampleRateHz = hz))
+        val clamped = AudioConfigRules.clamp(AudioConfig(p.codecEnum(), p.bitrateKbps, hz, p.mono))
+        updateProfileAudio(p.copy(sampleRateHz = clamped.sampleRateHz))
     }
 
     fun setMono(b: Boolean) {

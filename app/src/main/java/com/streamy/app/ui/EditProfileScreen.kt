@@ -130,7 +130,8 @@ fun EditProfileScreen(
     val djUserErr = isDj && djUser.isBlank()       // sc_trans djlogin / Icecast Basic-auth user
     val formValid = !nameErr && !hostErr && !portErr && !sidErr && !passwordErr && !mountErr && !djUserErr &&
         bitrate in (if (codec == Codec.AAC) AudioConfigRules.AAC_BITRATES else AudioConfigRules.MP3_BITRATES) &&
-        sampleRate in AudioConfigRules.SAMPLE_RATES
+        sampleRate in AudioConfigRules.SAMPLE_RATES &&
+        (codec != Codec.AAC || !isDj || !isAzuracast)
 
     if (!loaded) {
         // nothing — blank surface while the row loads (instant in practice)
@@ -306,6 +307,13 @@ fun EditProfileScreen(
                     if (!AudioConfigRules.needsHeAac(codec, bitrate) || b) mono = b
                 },
             )
+            if (codec == Codec.AAC && isDj && isAzuracast) {
+                Text(
+                    "AAC is not supported on Icecast mounts — MP3 will be used.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
