@@ -29,7 +29,7 @@ class AacEncoder(
         setInteger(MediaFormat.KEY_BIT_RATE, bitrateBps)
         // AAC is HE-AAC v1 (AAC-LC + SBR) across the whole bitrate ladder — better quality per
         // bit than AAC-LC, which is what speech-grade low-bitrate broadcast needs.
-        setInteger(MediaFormat.KEY_AAC_PROFILE, aacObjectType(bitrateBps / 1000))
+        setInteger(MediaFormat.KEY_AAC_PROFILE, aacObjectType())
         setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384)
     }
     private val info = MediaCodec.BufferInfo()
@@ -81,7 +81,7 @@ class AacEncoder(
             val o = codec.dequeueOutputBuffer(info, timeoutUs)
             when {
                 o >= 0 -> {
-                    val raw = stripAdts(codec.getOutputBuffer(o)!!, info.size)
+                    val raw = copyRawAu(codec.getOutputBuffer(o)!!, info.size)
                     out.add(raw)
                     codec.releaseOutputBuffer(o, false)
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return out
@@ -105,7 +105,7 @@ class AacEncoder(
     // ADTS header is added by the file/sink writer). KEY_IS_ADTS is decoder-only — there is no
     // encoder key to emit ADTS directly. So there is nothing to strip here; [UvoxClient.send]
     // re-wraps each AU in a 7-byte ADTS header for the 0x8003 data message.
-    private fun stripAdts(buf: java.nio.ByteBuffer, len: Int): ByteArray {
+    private fun copyRawAu(buf: java.nio.ByteBuffer, len: Int): ByteArray {
         val raw = ByteArray(len)
         buf.get(raw)
         return raw
@@ -135,7 +135,7 @@ class AacEncoder(
         /** AAC is HE-AAC v1 (AAC-LC + SBR) across the whole ladder — AAC-LC retired. Pure → unit tested.
          *  ponytail: switch ≤24 kbps mono to HE-AAC v2 (AACObjectHEV2, +Parametric Stereo) for even
          *  better speech quality once verified on-device against DNAS2. */
-        fun aacObjectType(bitrateKbps: Int) =
+        fun aacObjectType() =
             MediaCodecInfo.CodecProfileLevel.AACObjectHE
     }
 }
