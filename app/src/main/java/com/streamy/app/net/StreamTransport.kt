@@ -78,6 +78,10 @@ class StreamTransport(
                     if (stopped) break
                 } catch (e: Throwable) {
                     if (stopped) break
+                    if (isNonRetryable(e)) {
+                        onState(TransportState.Failed(e.message ?: "auth_failed"))
+                        break
+                    }
                     attempt++
                     if (shouldGiveUp(attempt)) {
                         // Wrong password / unreachable host: terminate instead of looping forever.
@@ -110,6 +114,9 @@ class StreamTransport(
     companion object {
         const val CAPACITY = 64
         fun shouldGiveUp(attempt: Int) = attempt >= 10
+
+        /** Auth/handshake rejections are permanent — retrying hammers the server and delays feedback. */
+        fun isNonRetryable(e: Throwable): Boolean = e is ProtocolException
 
         /**
          * Backoff ladder: 1s, 2s, 5s, 10s, then 20s cap — with ±20% uniform random jitter,
