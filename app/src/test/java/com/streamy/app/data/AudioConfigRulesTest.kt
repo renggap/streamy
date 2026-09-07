@@ -58,6 +58,12 @@ class AudioConfigRulesTest {
             AudioConfigRules.validate(AudioConfig(Codec.MP3, 24, 44100, mono = true))
         }
     }
+
+    @Test fun icecast_rejects_aac() {
+        assertThat(AudioConfigRules.isSupported(Codec.AAC, DjProtocol.ICECAST)).isFalse()
+        assertThat(AudioConfigRules.isSupported(Codec.MP3, DjProtocol.ICECAST)).isTrue()
+        assertThat(AudioConfigRules.isSupported(Codec.AAC, DjProtocol.ULTRAVOX)).isTrue()
+    }
 }
 
 inline fun <reified T : Throwable> assertThrows(block: () -> Unit) {

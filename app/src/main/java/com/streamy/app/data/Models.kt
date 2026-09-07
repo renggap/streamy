@@ -61,6 +61,10 @@ object AudioConfigRules {
         return c
     }
 
+    /** Icecast source mounts don't accept ADTS/AAC — only MP3 is supported there. */
+    fun isSupported(codec: Codec, protocol: DjProtocol): Boolean =
+        !(codec == Codec.AAC && protocol == DjProtocol.ICECAST)
+
     fun validate(c: AudioConfig): AudioConfig {
         val allowed = if (c.codec == Codec.AAC) AAC_BITRATES else MP3_BITRATES
         require(c.bitrateKbps in allowed) { "bitrate ${c.bitrateKbps} not in $allowed" }
