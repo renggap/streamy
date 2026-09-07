@@ -132,7 +132,7 @@ class RecordService : Service() {
 
                 // Build the file + sink off-thread (MediaStore insert / LAME init are slow),
                 // BEFORE arming — so capture starts with recording already live.
-                val name = "streamy-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}.mp3"
+                val name = "streamy-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}-${System.currentTimeMillis() % 1000}.mp3"
                 val target = RecordingStorage.open(this@RecordService, name)
                 if (target == null) {
                     runCatching { enc.close() }

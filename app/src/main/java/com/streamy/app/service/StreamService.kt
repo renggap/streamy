@@ -311,7 +311,7 @@ class StreamService : Service() {
         val cfg = liveCfg ?: run { _isRecording.value = false; return }
         scope.launch(Dispatchers.IO) {
             val built: StreamSink? = try {
-                val name = "streamy-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}.mp3"
+                val name = "streamy-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}-${System.currentTimeMillis() % 1000}.mp3"
                 val target = RecordingStorage.open(this@StreamService, name)
                 if (target == null) null else {
                     // MP3 stream → write frames as-is (zero re-encode). AAC stream → transcode via LAME.
