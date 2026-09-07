@@ -315,7 +315,7 @@ class StreamService : Service() {
             // Arm under the service monitor so a teardown that nulled the pipeline can't leave the
             // sink orphaned; close the just-built sink on bail (fd + native LAME).
             synchronized(this@StreamService) {
-                if (shuttingDown || pipeline == null) {
+                if (shuttingDown || pipeline == null || !_isRecording.value) {
                     runCatching { built.flush(); built.close() }
                     _isRecording.value = false
                 } else {
