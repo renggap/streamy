@@ -63,12 +63,26 @@ class AudioCapture(
         record!!.startRecording()
         running = true
         thread = kotlin.concurrent.thread(name = "streamy-audio", isDaemon = true) {
+          val rec = record ?: return@thread
           val buf = ShortArray(frameSamples * (if (mono) 1 else 2))
+          var consecutiveErrors = 0
           while (running) {
-              val n = record!!.read(buf, 0, buf.size)
+              val n = try { rec.read(buf, 0, buf.size) } catch (_: Throwable) { -1 }
               if (n > 0) {
+                  consecutiveErrors = 0
                   applyGain(buf, n)
                   if (!onFrame(buf.copyOf(n))) running = false
+              } else {
+                  // Zero/negative = dead mic or transient underrun. Count toward the
+                  // pipeline's short-read detector instead of spin-looping.
+                  consecutiveErrors++
+                  try { Thread.sleep(10) } catch (_: InterruptedException) {}
+                  if (consecutiveErrors > 100) {
+                      // ~1s of dead reads: surface as a short frame so AudioPipeline
+                      // trips onMicBusy via its SHORT_READ_LIMIT path.
+                      if (!onFrame(ShortArray(0))) running = false
+                      consecutiveErrors = 0
+                  }
               }
           }
         }
