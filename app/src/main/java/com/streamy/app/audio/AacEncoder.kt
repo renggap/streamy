@@ -38,12 +38,13 @@ class AacEncoder(
 
     // Encoder-side drop counter. Written on the audio thread only (single-writer discipline);
     // exposed for tests + UI surfacing.
-    var droppedFrames: Long = 0
+    @Volatile var droppedFrames: Long = 0
         private set
 
     init { codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE); codec.start() }
 
     override fun encode(pcm: ShortArray): List<ByteArray> {
+        check(!closed) { "encode after close" }
         if (eos) return emptyList()
         val inIdx = codec.dequeueInputBuffer(INPUT_WAIT_US)
         if (inIdx >= 0) {
