@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -34,16 +35,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 
 /*
- * Hallmark · nav graph — top-level destinations share a bottom NavigationBar.
- *   home       — on-air console
- *   profiles   — server list
- *   edit/{id}  — edit detail (id == 0 means new); bottom bar hidden
- *   settings   — about + legal + audio input + clear-data
- *
- * The Scaffold pads the NavHost by innerPadding so every screen clears both the status
- * bar (top) and the NavigationBar (bottom); screens keep their own internal padding.
- *
- * ponytail: type-safe navigation (kotlinx-serialization routes) when destinations grow.
+ * JokoUI nav: bottom bar with lime soft-fill indicator on the selected tab; the snackbar
+ * surfaces at the top so it stays visible above the keyboard / nav bar.
  */
 
 object Routes {
@@ -140,7 +133,10 @@ fun StreamyNavigation(
 
 @Composable
 private fun StreamyBottomBar(nav: NavHostController, currentRoute: String?) {
-    NavigationBar {
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
         TOP_DESTINATIONS.forEach { dest ->
             NavigationBarItem(
                 selected = currentRoute == dest.route,
@@ -155,6 +151,13 @@ private fun StreamyBottomBar(nav: NavHostController, currentRoute: String?) {
                 },
                 icon = { Icon(dest.icon, contentDescription = dest.label) },
                 label = { Text(dest.label) },
+                colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                ),
             )
         }
     }

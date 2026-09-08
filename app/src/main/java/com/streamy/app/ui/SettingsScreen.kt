@@ -1,11 +1,7 @@
 package com.streamy.app.ui
 
-import android.content.pm.PackageManager
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -17,7 +13,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,8 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.streamy.app.R
 
 /*
- * Hallmark · screen: Settings · macrostructure: Workbench about/list · theme: custom
- * (late-night tally light) — same Surface + hairline outline cards.
+ * JokoUI daylight about page: slate page, white rounded-xl FieldGroups.
  */
 
 /**
@@ -89,15 +83,16 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         ScreenHeader(
-            title = "SETTINGS",
+            title = "Settings",
             subtitle = "About · legal · data",
             onBack = onBack,
         )
 
-        FieldGroup("ABOUT") {
+        FieldGroup("About") {
             Text(
                 "Streamy",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
@@ -112,7 +107,7 @@ fun SettingsScreen(
             )
         }
 
-        FieldGroup("INPUT DEVICE") {
+        FieldGroup("Input device") {
             ExposedDropdownMenuBox(
                 expanded = deviceExpanded,
                 onExpandedChange = { deviceExpanded = it },
@@ -122,15 +117,15 @@ fun SettingsScreen(
                     onValueChange = {},
                     readOnly = true,
                     singleLine = true,
-                    shape = RoundedCornerShape(4.dp),
+                    shape = RoundedCornerShape(8.dp),
                     trailingIcon = {
                         ExposedDropdownMenuDefaults.TrailingIcon(expanded = deviceExpanded)
                     },
                     textStyle = MaterialTheme.typography.bodyMedium,
                     colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.background,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.background,
-                        disabledContainerColor = MaterialTheme.colorScheme.background,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        disabledContainerColor = MaterialTheme.colorScheme.surface,
                         focusedIndicatorColor = MaterialTheme.colorScheme.primary,
                         unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
                         focusedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -165,7 +160,7 @@ fun SettingsScreen(
             )
         }
 
-        FieldGroup("LEGAL") {
+        FieldGroup("Legal") {
             Text(
                 lameNotice,
                 style = MaterialTheme.typography.bodySmall,
@@ -180,25 +175,19 @@ fun SettingsScreen(
             )
         }
 
-        FieldGroup("DATA") {
+        FieldGroup("Data") {
             Text(
                 "${profiles.size} profile${if (profiles.size == 1) "" else "s"} stored on this device.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            OutlinedButton(
+            JokoOutlineButton(
+                text = "Clear all profiles",
                 onClick = { pendingClear = true },
                 enabled = profiles.isNotEmpty(),
-                shape = RoundedCornerShape(4.dp),
-                contentPadding = PaddingValues(vertical = 14.dp),
+                color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    "CLEAR ALL PROFILES",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
+            )
         }
     }
 
@@ -217,11 +206,17 @@ fun SettingsScreen(
                 TextButton(onClick = {
                     vm.clearAllProfiles()
                     pendingClear = false
-                }) { Text("CLEAR", style = MaterialTheme.typography.labelLarge) }
+                }) {
+                    Text(
+                        "Clear",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             },
             dismissButton = {
                 TextButton(onClick = { pendingClear = false }) {
-                    Text("CANCEL", style = MaterialTheme.typography.labelLarge)
+                    Text("Cancel", style = MaterialTheme.typography.labelLarge)
                 }
             },
         )

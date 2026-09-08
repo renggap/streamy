@@ -1,7 +1,6 @@
 package com.streamy.app.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -19,26 +18,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /*
- * Hallmark · macrostructure: Workbench (broadcast console) · tone: technical / austere
- * theme: custom (atmospheric cluster · vibe: "late-night tally light")
- * paper-band: dark  ·  display-style: mono  ·  accent-hue: warm (on-air red) + signal-green
+ * JokoUI (jokoui.web.id, MIT) design language, ported to Compose for Streamy.
  *
- * Ponytail: swap the implicit system fonts for a bundled display face (e.g. JetBrains Mono
- * via compose-assets) when the brand identity hardens. Current FontFamily.Monospace is the
- * platform's UI monospace which is acceptable, but a named face gives stronger identity.
+ * Source patterns (from the library's application components):
+ *  - Buttons: Primary `px-6 py-3 bg-lime-600 text-white font-semibold rounded-lg shadow-md`,
+ *    Secondary `bg-gray-100 text-gray-800`, Outline `border-2 border-lime-600 text-lime-600`.
+ *  - Cards: `rounded-xl border border-border bg-card` (white card on a slate page).
+ *  - Preview page: slate-50 `#f8fafc` canvas; badges `px-3 py-1 rounded-full bg-primary/10`.
+ *  - Type: Poppins (font-sans); platform SansSerif is the fallback (no bundled font yet).
+ *
+ * Streamy mapping: lime-600 is the primary action hue; slate is the neutral scale; the
+ * broadcast states keep semantic hues (on-air red-600, live green-600, amber-600) matching
+ * JokoUI's error/success/warning alerts. The app is LIGHT-first: the page background is
+ * slate-50 (`LightPaper`), never pure white — white is reserved for cards (bg-card).
  */
 
-// ---- Locked color tokens (OKLCH intent documented; sRGB vals are the Material3 reality) ----
-//
-// Paper dark ~ oklch(16% 0.005 240) — studio dim, near-black, cool-neutral.
-// Ink         ~ oklch(94% 0.005 240) — off-white, slight cool bias, anti-pure-white.
-// On-air red  ~ oklch(60% 0.22 25)   — broadcast tally-lamp, the canonical "RECORD" red.
-// Signal grn  ~ oklch(78% 0.18 145)  — "live signal" green, dimmed to avoid gaming-green.
-// Warning amb ~ oklch(80% 0.15 70)   — used for HE-AAC / restart-to-apply hints.
-// Rule        ~ ink @ 12% alpha      — hairline divider language.
-
 object StreamyColors {
-    // Dark (primary palette — broadcast console is dark by default)
+    // Dark (kept for API compat — the app currently themes light-only; see StreamyTheme)
     val DarkPaper = Color(0xFF14161A)
     val DarkPaper2 = Color(0xFF1B1E24)     // raised surface (cards)
     val DarkPaper3 = Color(0xFF242830)     // raised surface (buttons)
@@ -47,20 +43,26 @@ object StreamyColors {
     val DarkInk3 = Color(0xFF6B7280)        // tertiary / disabled
     val DarkRule = Color(0xFF2A2E36)
 
-    val OnAir = Color(0xFFFF3B30)           // broadcast tally red
-    val OnAirDim = Color(0xFF7A1A14)        // idle / outline state of red
-    val Live = Color(0xFF30D17B)            // signal green
+    val OnAir = Color(0xFFDC2626)           // broadcast tally red (JokoUI red-600 / error)
+    val OnAirDim = Color(0xFF7A1A14)        // idle / outline state of red (dark theme)
+    val Live = Color(0xFF16A34A)            // live signal green (JokoUI green-600 / success)
     val LiveDim = Color(0xFF0F5C36)
-    val Warn = Color(0xFFFFC542)            // amber hint
+    val Warn = Color(0xFFD97706)            // amber hint (JokoUI amber-600 / warning)
 
-    // Light (daylight variant — same accent hues, retuned for paper contrast)
-    val LightPaper = Color(0xFFFAFAFB)
-    val LightPaper2 = Color(0xFFFFFFFF)
-    val LightPaper3 = Color(0xFFEFF1F4)
-    val LightInk = Color(0xFF14161A)
-    val LightInk2 = Color(0xFF4A4F58)
-    val LightInk3 = Color(0xFF8A8F99)
-    val LightRule = Color(0xFFE2E5EA)
+    // JokoUI light scale (slate neutrals + lime primary)
+    val JokoPrimary = Color(0xFF65A30D)     // lime-600 — primary buttons, focus rings, links
+    val JokoPrimaryDark = Color(0xFF4D7C0F) // lime-700 — hover / strong tint text
+    val JokoPrimarySoft = Color(0xFFECFCCB) // lime-100 — soft badge / active toggle fill
+    val JokoPrimaryInk = Color(0xFF3F6212)  // lime-800 — text on soft fills
+
+    // Light (JokoUI daylight — slate page, white cards; background is never shiny white)
+    val LightPaper = Color(0xFFF8FAFC)      // slate-50 — app background (bg-[#f8fafc])
+    val LightPaper2 = Color(0xFFFFFFFF)     // white — cards (bg-card) pop off the slate page
+    val LightPaper3 = Color(0xFFF1F5F9)     // slate-100 — muted fills (bg-gray-100 / bg-muted)
+    val LightInk = Color(0xFF0F172A)        // slate-900 — headings / body (text-foreground)
+    val LightInk2 = Color(0xFF475569)       // slate-600 — secondary copy (text-muted)
+    val LightInk3 = Color(0xFF94A3B8)       // slate-400 — tertiary / disabled
+    val LightRule = Color(0xFFE2E8F0)       // slate-200 — card borders (border-border)
 }
 
 private val StreamyDarkColors = darkColorScheme(
@@ -86,31 +88,47 @@ private val StreamyDarkColors = darkColorScheme(
 )
 
 private val StreamyLightColors = lightColorScheme(
-    primary = StreamyColors.OnAir,
+    primary = StreamyColors.JokoPrimary,            // lime-600 — primary actions
     onPrimary = Color.White,
-    primaryContainer = StreamyColors.OnAirDim,
-    onPrimaryContainer = StreamyColors.OnAir,
-    secondary = StreamyColors.Live,
-    onSecondary = Color.Black,
-    secondaryContainer = StreamyColors.LiveDim,
-    onSecondaryContainer = StreamyColors.Live,
-    tertiary = StreamyColors.Warn,
-    background = StreamyColors.LightPaper,
-    onBackground = StreamyColors.LightInk,
-    surface = StreamyColors.LightPaper2,
-    onSurface = StreamyColors.LightInk,
-    surfaceVariant = StreamyColors.LightPaper3,
-    onSurfaceVariant = StreamyColors.LightInk2,
-    outline = StreamyColors.LightRule,
-    outlineVariant = StreamyColors.LightInk3,
-    error = StreamyColors.OnAir,
+    primaryContainer = StreamyColors.JokoPrimarySoft, // lime-100 — soft fills
+    onPrimaryContainer = StreamyColors.JokoPrimaryInk, // lime-800 — text on soft fills
+    secondary = StreamyColors.Live,                 // green-600 — live state
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFDCFCE7),         // green-100 — selected-tab pill
+    onSecondaryContainer = Color(0xFF166534),       // green-800
+    tertiary = StreamyColors.Warn,                  // amber-600 — hints
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFFEF3C7),          // amber-100 — warning soft fills
+    onTertiaryContainer = Color(0xFF92400E),        // amber-800
+    error = StreamyColors.OnAir,                    // red-600 — stop / destructive / errors
     onError = Color.White,
+    errorContainer = Color(0xFFFEE2E2),             // red-100
+    onErrorContainer = Color(0xFF991B1B),           // red-800
+    background = StreamyColors.LightPaper,          // slate-50 — page, never white
+    onBackground = StreamyColors.LightInk,
+    surface = StreamyColors.LightPaper2,            // white — cards (bg-card)
+    onSurface = StreamyColors.LightInk,
+    surfaceVariant = StreamyColors.LightPaper3,     // slate-100 — muted fills
+    onSurfaceVariant = StreamyColors.LightInk2,
+    surfaceContainerLowest = StreamyColors.LightPaper2,
+    surfaceContainerLow = StreamyColors.LightPaper,
+    surfaceContainer = StreamyColors.LightPaper3,
+    surfaceContainerHigh = StreamyColors.LightPaper2,
+    surfaceContainerHighest = StreamyColors.LightRule,
+    surfaceDim = StreamyColors.LightPaper,
+    surfaceBright = StreamyColors.LightPaper2,
+    outline = StreamyColors.LightRule,              // slate-200 — card borders
+    outlineVariant = StreamyColors.LightInk3,       // slate-400
+    inverseSurface = Color(0xFF0F172A),              // slate-900 — snackbars/toasts
+    inverseOnSurface = Color(0xFFF8FAFC),
+    inversePrimary = Color(0xFFA3E635),              // lime-400 — readable on dark
+    scrim = Color(0xFF0F172A),
 )
 
 // ---- Typography ----
-// Display = monospace (technical readout voice — bitrates, sample rates, state labels).
-// Body    = platform sans-serif (humanist, comfortable for labels and helper copy).
-// No italics on display. Emphasis carried by weight + size only.
+// JokoUI ships Poppins (font-sans); the app has no bundled font yet, so the platform
+// sans is the stand-in for headings/body and monospace keeps the technical readout voice
+// (dB labels, bitrates, state pills). Labels stay tracked-out — that is the console voice.
 
 object StreamyType {
     val Mono = FontFamily.Monospace
@@ -222,21 +240,20 @@ private val StreamyTypography = Typography(
 )
 
 // ---- Shapes ----
-// Deliberately small radii. The default Material3 "rounded everywhere" look is a slop tell;
-// console surfaces want crisp edges with a hairline soften. Hard 0dp on hairline dividers,
-// 2dp on chips, 4dp on cards, 0dp on the hero button (the tally button is a hard slab).
+// JokoUI card language: `rounded-xl` (12dp) cards, `rounded-lg` (8dp) controls,
+// `rounded-full` pills. M3 mapped: large cards, medium/small controls, extraSmall chips.
 
 private val StreamyShapes = Shapes(
-    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(2.dp),
-    small = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
-    medium = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
-    large = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(50),
+    small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+    medium = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+    large = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
 )
 
 @Composable
 fun StreamyTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,   // JokoUI daylight-first: light always, never follow system dark
     content: @Composable () -> Unit,
 ) {
     val colors = if (darkTheme) StreamyDarkColors else StreamyLightColors

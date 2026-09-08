@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -18,7 +17,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,12 +29,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.streamy.app.data.AudioConfig
 import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.BroadcastMode
@@ -45,18 +43,13 @@ import com.streamy.app.data.DjProtocol
 import com.streamy.app.data.db.ProfileEntity
 
 /*
- * Hallmark · screen: EditProfile · macrostructure: Workbench form · theme: custom
- * (late-night tally light) — same Surface + hairline outline + mono labels as Home.
+ * JokoUI daylight form: slate page, white rounded-xl FieldGroups, lime primary save.
+ * State held in local remember — standard for forms; the VM only hears the final save.
  */
 
 /**
  * Create or edit a server profile. New when [profileId] is null or 0; otherwise loads the
- * existing row and populates the form. Required: name, host, port, password.
- *
- * Codec/bitrate/sample/mono use the shared stateless [BitrateChooser]; HE-AAC + mono
- * forcing is applied on each callback so the form mirrors the VM-side rules.
- *
- * State held in local remember — standard for forms; the VM only hears the final save.
+ * existing row and populates the form.
  */
 @Composable
 fun EditProfileScreen(
@@ -147,40 +140,41 @@ fun EditProfileScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         ScreenHeader(
-            title = if (isNew) "NEW PROFILE" else "EDIT PROFILE",
+            title = if (isNew) "New profile" else "Edit profile",
             subtitle = if (isNew) "SHOUTcast v2"
             else name.ifBlank { "Editing" },
             onBack = onBack,
         )
 
-        FieldGroup("SERVER") {
+        FieldGroup("Server") {
             // MODE: SOURCE pushes to DNAS (Streamy is the source); DJ pushes to sc_trans djport2
             // (sc_trans re-encodes the feed). DJ v1 = MP3 (sc_trans AAC acceptance unverified).
             Text(
-                "MODE",
+                "Mode",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(BroadcastMode.SOURCE to "SOURCE", BroadcastMode.DJ to "DJ").forEach { (m, label) ->
+                listOf(BroadcastMode.SOURCE to "Source", BroadcastMode.DJ to "DJ").forEach { (m, label) ->
                     Button(
                         onClick = {
                             mode = m
                             if (m == BroadcastMode.DJ && codec == Codec.AAC) codec = Codec.MP3
                         },
-                        shape = RoundedCornerShape(4.dp),
+                        shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (mode == m) MaterialTheme.colorScheme.surfaceVariant
-                            else MaterialTheme.colorScheme.surface,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            containerColor = if (mode == m) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (mode == m) MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
                         ),
                         contentPadding = PaddingValues(vertical = 12.dp),
                         modifier = Modifier.weight(1f),
                     ) {
                         Text(
                             label,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = if (mode == m) FontWeight.Black else FontWeight.Medium,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (mode == m) FontWeight.SemiBold else FontWeight.Medium,
                         )
                     }
                 }
@@ -280,7 +274,7 @@ fun EditProfileScreen(
             }
         }
 
-        FieldGroup("AUDIO") {
+        FieldGroup("Audio") {
             BitrateChooser(
                 codec = codec,
                 bitrate = bitrate,
@@ -318,21 +312,17 @@ fun EditProfileScreen(
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!isNew) {
-                OutlinedButton(
+                JokoOutlineButton(
+                    text = "Delete",
                     onClick = { pendingDelete = true },
-                    shape = RoundedCornerShape(4.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    contentPadding = PaddingValues(vertical = 16.dp),
+                    color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.weight(1f),
-                ) {
-                    Text("DELETE", style = MaterialTheme.typography.labelLarge)
-                }
+                )
             }
-            Button(
+            JokoPrimaryButton(
+                text = if (isNew) "Save" else "Update",
                 onClick = {
-                    if (!formValid) return@Button
+                    if (!formValid) return@JokoPrimaryButton
                     val entity = ProfileEntity(
                         id = if (isNew) 0L else profileId!!,
                         name = name.trim(),
@@ -355,22 +345,9 @@ fun EditProfileScreen(
                     vm.saveProfile(entity) { onBack() }
                 },
                 enabled = formValid,
-                shape = RoundedCornerShape(4.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-                contentPadding = PaddingValues(vertical = 16.dp),
                 modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    if (isNew) "SAVE" else "UPDATE",
-                    style = MaterialTheme.typography.labelLarge,
-                    letterSpacing = 2.sp,
-                )
-            }
+                verticalPadding = 14.dp,
+            )
         }
     }
 
@@ -392,11 +369,17 @@ fun EditProfileScreen(
                     }
                     pendingDelete = false
                     onBack()
-                }) { Text("DELETE", style = MaterialTheme.typography.labelLarge) }
+                }) {
+                    Text(
+                        "Delete",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = false }) {
-                    Text("CANCEL", style = MaterialTheme.typography.labelLarge)
+                    Text("Cancel", style = MaterialTheme.typography.labelLarge)
                 }
             },
         )
@@ -411,19 +394,24 @@ internal fun FieldGroup(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
+            .shadow(
+                elevation = 2.dp,
+                shape = RoundedCornerShape(12.dp),
+            )
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
             .border(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.outline,
-                shape = RoundedCornerShape(6.dp),
+                shape = RoundedCornerShape(12.dp),
             )
-            .padding(horizontal = 14.dp, vertical = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         content()
     }
@@ -457,23 +445,23 @@ internal fun LabeledTextField(
                 Text(
                     placeholder,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.outlineVariant,
                 )
             },
             isError = error != null,
             singleLine = true,
-            shape = RoundedCornerShape(4.dp),
+            shape = RoundedCornerShape(8.dp),
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             visualTransformation = visualTransformation,
             trailingIcon = trailing,
             textStyle = MaterialTheme.typography.bodyMedium,
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.background,
-                unfocusedContainerColor = MaterialTheme.colorScheme.background,
-                disabledContainerColor = MaterialTheme.colorScheme.background,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                disabledContainerColor = MaterialTheme.colorScheme.surface,
                 focusedIndicatorColor = MaterialTheme.colorScheme.primary,
                 unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
-                errorIndicatorColor = MaterialTheme.colorScheme.primary,
+                errorIndicatorColor = MaterialTheme.colorScheme.error,
                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
                 unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                 cursorColor = MaterialTheme.colorScheme.primary,
@@ -484,7 +472,7 @@ internal fun LabeledTextField(
             Text(
                 error,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.error,
             )
         }
     }

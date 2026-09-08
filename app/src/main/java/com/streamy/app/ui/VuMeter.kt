@@ -31,9 +31,9 @@ import com.streamy.app.audio.LevelSnapshot
 import kotlin.math.roundToInt
 
 /*
- * Hallmark · component: oscilloscope VU meter · theme: custom ("late-night tally light")
- * Surface + hairline outline matches Home's cards; on-air red trace, mono dB label,
- * phosphor afterglow (previous frame held at low alpha under the live trace).
+ * JokoUI signal card: flat rows on the parent JokoCard (white rounded-xl on the slate page).
+ * Lime-600 trace (the primary action hue) + slate grid; mono dB label; phosphor afterglow
+ * (previous frame held at low alpha under the live trace).
  * No per-frame allocations in the draw lambda beyond the two reused [Path]s — colors and
  * Stroke widths are hoisted out as remembered values.
  */
@@ -46,9 +46,9 @@ fun VuMeter(levelsFlow: StateFlow<LevelSnapshot?>, modifier: Modifier = Modifier
     val snapshot by levelsFlow.collectAsStateWithLifecycle()
     val outline = MaterialTheme.colorScheme.outline
     val outlineVariant = MaterialTheme.colorScheme.outlineVariant
-    val surface = MaterialTheme.colorScheme.surface
+    val canvasBg = MaterialTheme.colorScheme.surfaceVariant   // slate-100 scope face
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
-    val traceColor = MaterialTheme.colorScheme.primary   // on-air red (StreamyColors.OnAir)
+    val traceColor = MaterialTheme.colorScheme.primary   // lime-600 (JokoPrimary)
 
     // Low-alpha variants — value-class copies, no alloc.
     val gridColor = outline.copy(alpha = 0.35f)
@@ -74,8 +74,7 @@ fun VuMeter(levelsFlow: StateFlow<LevelSnapshot?>, modifier: Modifier = Modifier
         modifier
             .fillMaxWidth()
             .height(104.dp)
-            .background(surface, RoundedCornerShape(6.dp))
-            .border(width = 1.dp, color = outline, shape = RoundedCornerShape(6.dp)),
+            .background(canvasBg, RoundedCornerShape(8.dp)),
     ) {
         Canvas(
             Modifier

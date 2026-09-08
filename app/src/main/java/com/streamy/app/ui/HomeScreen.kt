@@ -1,12 +1,6 @@
 package com.streamy.app.ui
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,11 +29,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.service.RecordState
@@ -47,21 +38,13 @@ import com.streamy.app.service.StreamState
 import kotlin.math.roundToInt
 
 /*
- * Hallmark · screen: Home · macrostructure: Workbench (broadcast console) · theme: custom
- * (atmospheric cluster · "late-night tally light") — reuses Theme.kt tokens.
- */
-
-/**
- * Single-screen broadcast console. Pulls from [vm] state, emits via vm mutators. The hero
- * element is the tally-lamp Start/Stop control — hard slab, on-air red when armed, signal
- * green when Live.
+ * JokoUI daylight console: slate-50 page, white rounded-xl cards, lime-600 primary actions,
+ * semantic tally hues (on-air red / live green / amber) for stream states.
  *
+ * Single-screen broadcast console. Pulls from [vm] state, emits via vm mutators.
  * The chooser is bound to the SELECTED profile via [vm]: changing codec/bitrate/sample/
  * mono tunes the profile row in place. When no profile is selected, the chooser is
  * disabled with a "select a profile first" hint.
- *
- * ponytail: VU meter + local recording toggle — add RMS callback to
- * AudioCapture/AudioPipeline, then surface here.
  */
 @Composable
 fun HomeScreen(
@@ -101,153 +84,131 @@ fun HomeScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(top = 24.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(28.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Masthead()
 
-            StatePill(state = state)
+            StateBadge(state = state)
 
             if (isLive && droppedFrames > 0L) {
-                Hint(
-                    "Dropped $droppedFrames frame${if (droppedFrames == 1L) "" else "s"} — network can't keep up; listeners may hear gaps",
-                    tone = HintTone.Warn,
+                JokoAlert(
+                    text = "Dropped $droppedFrames frame${if (droppedFrames == 1L) "" else "s"} — network can't keep up; listeners may hear gaps",
+                    color = MaterialTheme.colorScheme.tertiary,
                 )
             }
 
-            HeroControl(
-                state = state,
-                enabled = !isBusy && hasProfile,
-                onStart = vm::start,
-                onStop = vm::stop,
-            )
-
-            if (hasProfile) {
-                NowPlayingSection(
-                    text = nowPlaying,
-                    onTextChange = { nowPlaying = it },
-                    isLive = isLive,
-                    onUpdate = { vm.updateNowPlaying(nowPlaying) },
+            // 1 · Broadcast — the hero tally card.
+            JokoSectionHead(index = 1, title = "Broadcast")
+            JokoCard {
+                HeroControl(
+                    state = state,
+                    enabled = !isBusy && hasProfile,
+                    onStart = vm::start,
+                    onStop = vm::stop,
                 )
+                if (hasProfile) {
+                    NowPlayingSection(
+                        text = nowPlaying,
+                        onTextChange = { nowPlaying = it },
+                        isLive = isLive,
+                        onUpdate = { vm.updateNowPlaying(nowPlaying) },
+                    )
+                }
             }
 
-            VuMeter(levelsFlow = vm.levels)
+            // 2 · Signal — meter + mic in one card.
+            JokoSectionHead(index = 2, title = "Signal")
+            JokoCard {
+                VuMeter(levelsFlow = vm.levels)
+                MicVolumeSlider(gain = micGain, onChange = vm::setMicGain)
+            }
 
-            MicVolumeSlider(gain = micGain, onChange = vm::setMicGain)
-
-            RecordControl(
-                state = state,
-                recordState = recordState,
-                isRecording = isRecording,
-                recordingPath = recordingPath,
-                hasProfile = hasProfile,
-                onToggleRecorder = vm::toggleStandaloneRecording,
-                onToggleLiveRecording = vm::toggleRecording,
-            )
+            // 3 · Recorder.
+            JokoSectionHead(index = 3, title = "Recorder")
+            JokoCard {
+                RecordControl(
+                    state = state,
+                    recordState = recordState,
+                    isRecording = isRecording,
+                    recordingPath = recordingPath,
+                    hasProfile = hasProfile,
+                    onToggleRecorder = vm::toggleStandaloneRecording,
+                    onToggleLiveRecording = vm::toggleRecording,
+                )
+            }
 
             if (needsRestart) {
-                Hint(
-                    "Settings changed — stop and restart to apply",
-                    tone = HintTone.Warn,
+                JokoAlert(
+                    text = "Settings changed — stop and restart to apply",
+                    color = MaterialTheme.colorScheme.tertiary,
                 )
             }
 
-            ProfileChip(
-                profile = selectedProfile,
-                profileCount = profiles.size,
-                enabled = !isLive && !isBusy,
-                onManageProfiles = onManageProfiles,
-            )
-
-            if (hasProfile) {
-                BitrateChooser(
-                    codec = codec,
-                    bitrate = bitrate,
-                    sampleRate = sampleRate,
-                    mono = mono,
-                    enabled = chooserEnabled,
-                    onCodec = vm::setCodec,
-                    onBitrate = vm::setBitrate,
-                    onSampleRate = vm::setSampleRate,
-                    onMono = vm::setMono,
+            // 4 · Setup — profile + audio on one card.
+            JokoSectionHead(index = 4, title = "Setup")
+            JokoCard {
+                ProfileChip(
+                    profile = selectedProfile,
+                    profileCount = profiles.size,
+                    enabled = !isLive && !isBusy,
+                    onManageProfiles = onManageProfiles,
                 )
-            } else {
-                NoProfileHint(onManageProfiles = onManageProfiles)
+                if (hasProfile) {
+                    BitrateChooser(
+                        codec = codec,
+                        bitrate = bitrate,
+                        sampleRate = sampleRate,
+                        mono = mono,
+                        enabled = chooserEnabled,
+                        onCodec = vm::setCodec,
+                        onBitrate = vm::setBitrate,
+                        onSampleRate = vm::setSampleRate,
+                        onMono = vm::setMono,
+                    )
+                } else {
+                    NoProfileHint(onManageProfiles = onManageProfiles)
+                }
             }
         }
     }
 }
 
-// ---- Masthead ----
+// ---- Masthead: eyebrow pill + foreground title + muted subtitle ----
 
 @Composable
 private fun Masthead() {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        JokoEyebrow("On-air console")
         Text(
-            text = "STREAMY",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            letterSpacing = 6.sp,
+            text = "Streamy",
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
         )
         Text(
-            text = "On-air console",
+            text = "Broadcast live speech to your SHOUTcast server.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
-// ---- State pill ----
+// ---- State badge (JokoUI dot badge with tally semantics) ----
 
 @Composable
-private fun StatePill(state: StreamState) {
+private fun StateBadge(state: StreamState) {
     val (label, tone) = state.toPill()
     val dotColor = when (tone) {
         PillTone.Live -> MaterialTheme.colorScheme.secondary
         PillTone.Busy -> MaterialTheme.colorScheme.tertiary
-        PillTone.Error -> MaterialTheme.colorScheme.primary
-        PillTone.Idle -> MaterialTheme.colorScheme.onSurfaceVariant
+        PillTone.Error -> MaterialTheme.colorScheme.error
+        PillTone.Idle -> MaterialTheme.colorScheme.outlineVariant
     }
-
-    // Functional motion: a slow pulse on the dot when Live so the user has peripheral
-    // confirmation the stream is up. Cut entirely under prefers-reduced-motion via the
-    // system's animation scale (Compose respects this automatically for infinite anims).
-    val pulseAlpha = if (tone == PillTone.Live) {
-        val t = rememberInfiniteTransition(label = "live-pulse")
-        val a by t.animateFloat(
-            initialValue = 1f,
-            targetValue = 0.35f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1_400),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "pulse",
-        )
-        a
-    } else {
-        1f
-    }
-
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
-            .background(
-                MaterialTheme.colorScheme.surfaceVariant,
-                RoundedCornerShape(50),
-            )
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(
-            Modifier
-                .size(8.dp)
-                .alpha(pulseAlpha)
-                .background(dotColor, androidx.compose.foundation.shape.CircleShape),
-        )
-        Text(
-            label,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        JokoDotBadge(text = label, dotColor = dotColor, pulse = tone == PillTone.Live)
         if (tone == PillTone.Busy) {
             JokoPulseRing(dotColor, size = 12.dp)
         }
@@ -290,8 +251,6 @@ private fun HeroControl(
     //   - Live      -> onStop  (Stop)
     //   - Busy/Err  -> onStop  (Stop / abort)
     val lampAction: () -> Unit = if (state is StreamState.Idle) onStart else onStop
-    val lampColor = if (isLive) MaterialTheme.colorScheme.secondary
-    else MaterialTheme.colorScheme.primary
     val lampLabel = when {
         isLive -> "STOP"
         state is StreamState.Idle -> "START"
@@ -302,26 +261,28 @@ private fun HeroControl(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Button(
-            onClick = lampAction,
-            enabled = enabled || state !is StreamState.Idle,
-            shape = RoundedCornerShape(4.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = lampColor,
-                contentColor = if (isLive) MaterialTheme.colorScheme.onSecondary
-                else MaterialTheme.colorScheme.onPrimary,
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            ),
-            contentPadding = PaddingValues(vertical = 28.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            // Big mono label — the visual anchor of the screen.
-            Text(
-                lampLabel,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 4.sp,
+        // Tally semantics: red-600 to stop a live broadcast (destructive), lime-600 primary
+        // to start, slate-100 secondary to abort a busy/error state.
+        when {
+            isLive -> JokoPrimaryButton(
+                text = lampLabel,
+                onClick = lampAction,
+                container = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError,
+                verticalPadding = 20.dp,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            state is StreamState.Idle -> JokoPrimaryButton(
+                text = lampLabel,
+                onClick = lampAction,
+                enabled = enabled,
+                verticalPadding = 20.dp,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            else -> JokoSecondaryButton(
+                text = lampLabel,
+                onClick = lampAction,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         Text(
@@ -334,7 +295,7 @@ private fun HeroControl(
     }
 }
 
-// ---- Profile chip ----
+// ---- Profile summary (flat rows inside the Setup card) ----
 
 @Composable
 private fun ProfileChip(
@@ -345,30 +306,30 @@ private fun ProfileChip(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "PROFILE",
+            "Profile",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
-                .border(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outline,
-                    shape = RoundedCornerShape(6.dp),
-                )
-                .padding(horizontal = 14.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth(),
         ) {
+            Box(
+                Modifier
+                    .size(10.dp)
+                    .background(
+                        if (profile != null) MaterialTheme.colorScheme.secondary
+                        else MaterialTheme.colorScheme.outlineVariant,
+                        androidx.compose.foundation.shape.CircleShape,
+                    ),
+            )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     profile?.name ?: "No profile selected",
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (profile != null) MaterialTheme.colorScheme.onSurface
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 val summary = profile?.let {
                     "${it.host}:${it.port} · ${it.codec} ${it.bitrateKbps} kbps"
@@ -385,31 +346,28 @@ private fun ProfileChip(
                 enabled = enabled,
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
             ) {
-                Text("MANAGE", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    "Manage",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
     }
 }
 
-// ---- Empty-state hint (no profile selected) ----
+// ---- Empty-state hint (flat copy inside the Setup card) ----
 
 @Composable
 private fun NoProfileHint(onManageProfiles: () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline,
-                shape = RoundedCornerShape(6.dp),
-            )
-            .padding(horizontal = 14.dp, vertical = 18.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
             "Select a profile first",
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
@@ -422,12 +380,16 @@ private fun NoProfileHint(onManageProfiles: () -> Unit) {
             onClick = onManageProfiles,
             contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
         ) {
-            Text("MANAGE PROFILES", style = MaterialTheme.typography.labelLarge)
+            Text(
+                "Manage profiles",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }
 
-// ---- Now-playing metadata pusher ----
+// ---- Now-playing metadata (flat field inside the Broadcast card) ----
 
 @Composable
 private fun NowPlayingSection(
@@ -438,7 +400,7 @@ private fun NowPlayingSection(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
-            "NOW PLAYING",
+            "Now playing",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -449,32 +411,32 @@ private fun NowPlayingSection(
                 Text(
                     "Artist - Track",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.outlineVariant,
                 )
             },
             singleLine = true,
-            shape = RoundedCornerShape(4.dp),
+            shape = RoundedCornerShape(8.dp),
             textStyle = MaterialTheme.typography.bodyMedium,
             trailingIcon = {
                 Button(
                     onClick = onUpdate,
                     enabled = isLive,
-                    shape = RoundedCornerShape(4.dp),
+                    shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
                         disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledContentColor = MaterialTheme.colorScheme.outlineVariant,
                     ),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
                 ) {
-                    Text("UPDATE", style = MaterialTheme.typography.labelLarge)
+                    Text("Update", style = MaterialTheme.typography.labelLarge)
                 }
             },
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.background,
-                unfocusedContainerColor = MaterialTheme.colorScheme.background,
-                disabledContainerColor = MaterialTheme.colorScheme.background,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                disabledContainerColor = MaterialTheme.colorScheme.surface,
                 focusedIndicatorColor = MaterialTheme.colorScheme.primary,
                 unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
@@ -484,18 +446,6 @@ private fun NowPlayingSection(
             modifier = Modifier.fillMaxWidth(),
         )
     }
-}
-
-// ---- Hint banner (jokoui Alert structure: soft tinted fill + 1dp tinted border + dot) ----
-
-private enum class HintTone { Warn }
-
-@Composable
-private fun Hint(text: String, tone: HintTone) {
-    val color = when (tone) {
-        HintTone.Warn -> MaterialTheme.colorScheme.tertiary
-    }
-    JokoAlert(text = text, color = color)
 }
 
 // ---- Mic volume (software gain) ----
@@ -509,14 +459,15 @@ private fun MicVolumeSlider(gain: Float, onChange: (Float) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                "MIC VOLUME",
+                "Mic volume",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 "${(gain * 100f).roundToInt()}%",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
             )
         }
         Slider(
@@ -550,33 +501,38 @@ private fun RecordControl(
     val recorderActive = recordState is RecordState.Recording
     val recorderError = recordState as? RecordState.Error
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            SectionLabel("RECORDER")
+            Text(
+                "Recorder",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             if (recorderActive) {
-                JokoSoftBadge("RECORDING", MaterialTheme.colorScheme.primary)
+                JokoSoftBadge("Recording", MaterialTheme.colorScheme.error)
             } else if (isRecording) {
-                JokoSoftBadge("TAPPING STREAM", MaterialTheme.colorScheme.primary)
+                JokoSoftBadge("Tapping stream", MaterialTheme.colorScheme.primary)
             }
         }
         // Standalone recorder: primary action, available whether Idle or Live (records in
         // parallel with a broadcast). Needs a profile for the encode config.
         JokoPrimaryButton(
-            text = if (recorderActive) "STOP RECORDING" else "RECORD MP3",
+            text = if (recorderActive) "Stop recording" else "Record MP3",
             onClick = onToggleRecorder,
             enabled = hasProfile,
-            container = if (recorderActive) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+            container = if (recorderActive) MaterialTheme.colorScheme.error
+            else MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier.fillMaxWidth(),
             verticalPadding = 14.dp,
         )
         if (isLive) {
             // While Live, offer the stream tap (encoded frames as-is / transcode) too.
             JokoOutlineButton(
-                text = if (isRecording) "STOP STREAM RECORDING" else "RECORD THIS STREAM",
+                text = if (isRecording) "Stop stream recording" else "Record this stream",
                 onClick = onToggleLiveRecording,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -592,7 +548,7 @@ private fun RecordControl(
         if (recorderError != null) {
             JokoAlert(
                 text = "Recorder error: ${recorderError.reason.humanize().lowercase()}",
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.error,
             )
         }
     }

@@ -35,16 +35,11 @@ import com.streamy.app.data.AudioConfigRules
 import com.streamy.app.data.Codec
 
 /*
- * Hallmark · component: chooser · genre: atmospheric · theme: custom (late-night tally light)
- * states: default · hover · focus · active · disabled · loading(n/a) · error(n/a) · success(n/a)
- *
- * Stateless: caller passes value + callbacks. Two call sites — HomeScreen (bound to VM)
- * and EditProfileScreen (bound to local form state) — share the codec/bitrate/sample/mono
- * rules (HE-AAC at AAC ≤ 24 → mono forced) from this single source.
- *
- * Codec stays as two pills (MP3/AAC); bitrate / sample-rate / channels collapse to
- * ExposedDropdownMenuBox dropdowns to save vertical space. Same public signature, so both
- * call sites compile unchanged.
+ * JokoUI chooser: codec as two soft-fill toggles (active = lime-100 bg + lime-800 text),
+ * bitrate / sample-rate / channels as rounded-lg dropdowns. Stateless: caller passes value
+ * + callbacks. Two call sites — HomeScreen (bound to VM) and EditProfileScreen (bound to
+ * local form state) — share the codec/bitrate/sample/mono rules (HE-AAC at AAC ≤ 24 →
+ * mono forced) from this single source.
  */
 
 /**
@@ -75,18 +70,18 @@ fun BitrateChooser(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // ---- Codec toggle (pills, per spec) ----
-        SectionLabel("CODEC")
+        // ---- Codec toggle (soft fills, per JokoUI badge language) ----
+        SectionLabel("Codec")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TogglePill(
                 label = "MP3",
                 active = codec == Codec.MP3,
                 enabled = enabled,
                 onClick = { onCodec(Codec.MP3) },
-                activeContainer = MaterialTheme.colorScheme.surfaceVariant,
-                activeContent = MaterialTheme.colorScheme.onSurfaceVariant,
+                activeContainer = MaterialTheme.colorScheme.primaryContainer,
+                activeContent = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.weight(1f),
             )
             // AAC streams as HE-AAC over Ultravox (audio/aacp, data msg 0x8003) — see AacEncoder.
@@ -96,15 +91,15 @@ fun BitrateChooser(
                 active = codec == Codec.AAC,
                 enabled = enabled && allowAac,
                 onClick = { onCodec(Codec.AAC) },
-                activeContainer = MaterialTheme.colorScheme.surfaceVariant,
-                activeContent = MaterialTheme.colorScheme.onSurfaceVariant,
+                activeContainer = MaterialTheme.colorScheme.primaryContainer,
+                activeContent = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.weight(1f),
             )
         }
 
         // ---- Bitrate ladder (dropdown) ----
         DropdownField(
-            label = "BITRATE · KBPS",
+            label = "Bitrate",
             selected = "$bitrate kbps",
             enabled = enabled,
             options = bitrates.map { it to "$it kbps" },
@@ -128,7 +123,7 @@ fun BitrateChooser(
 
         // ---- Sample rate (dropdown) ----
         DropdownField(
-            label = "SAMPLE RATE",
+            label = "Sample rate",
             selected = sampleRate.toKHz(),
             enabled = enabled,
             options = AudioConfigRules.validSampleRatesFor(codec, bitrate).map { it to it.toKHz() },
@@ -137,7 +132,7 @@ fun BitrateChooser(
 
         // ---- Channels (dropdown; disabled while HE-AAC forces mono) ----
         DropdownField(
-            label = "CHANNELS",
+            label = "Channels",
             selected = if (mono) "Mono" else "Stereo",
             enabled = enabled && !heAac,
             options = listOf(true to "Mono", false to "Stereo"),
@@ -147,8 +142,8 @@ fun BitrateChooser(
 }
 
 /**
- * Labeled read-only [ExposedDropdownMenuBox] styled to match [LabeledTextField] elsewhere
- * in the app (hairline outline, background container, small rounded shape).
+ * Labeled read-only [ExposedDropdownMenuBox] styled to match JokoUI inputs
+ * (rounded-lg, slate containers).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -172,7 +167,7 @@ private fun <T> DropdownField(
                 readOnly = true,
                 enabled = enabled,
                 singleLine = true,
-                shape = RoundedCornerShape(4.dp),
+                shape = RoundedCornerShape(8.dp),
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                 },
@@ -233,18 +228,20 @@ private fun TogglePill(
     Button(
         onClick = onClick,
         enabled = enabled,
-        shape = MaterialTheme.shapes.small,
+        shape = RoundedCornerShape(8.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (active) activeContainer else MaterialTheme.colorScheme.surface,
+            containerColor = if (active) activeContainer else MaterialTheme.colorScheme.surfaceVariant,
             contentColor = if (active) activeContent else MaterialTheme.colorScheme.onSurfaceVariant,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            disabledContentColor = MaterialTheme.colorScheme.outlineVariant,
         ),
         contentPadding = PaddingValues(vertical = 14.dp),
         modifier = modifier,
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = if (active) FontWeight.Black else FontWeight.Medium,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
         )
     }
 }

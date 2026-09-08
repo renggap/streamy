@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -31,29 +32,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /*
  * JokoUI (jokoui.web.id, MIT) design language, ported to Compose for Streamy.
  *
- * Tokens taken from the library's application components:
- *  - Badges: "Dot Badges" (gray pill + colored status dot) and "Soft Badges"
- *    (tinted bg / tinted text, rounded-full) — the status language of the console.
- *  - Buttons: Primary (solid, rounded-lg), Outline (2dp border, tinted text) — full-width on mobile.
- *  - Alerts: soft tinted container + 1dp tinted border + dot marker — used for hints.
+ * Faithful source patterns (fetched from the library's application components):
+ *  - Buttons: Primary `px-6 py-3 bg-lime-600 text-white font-semibold rounded-lg shadow-md
+ *    hover:bg-lime-700 focus:ring-2 focus:ring-lime-500`; Secondary `bg-gray-100 text-gray-800`;
+ *    Outline `border-2 border-lime-600 text-lime-600 hover:bg-lime-600 hover:text-white`.
+ *  - Cards: `rounded-xl border border-border bg-card` — white card on slate page.
+ *  - Badges: `px-3 py-1 rounded-full text-sm font-medium bg-primary/10 text-primary`.
+ *  - Section head: numbered `w-8 h-8 rounded-full bg-primary/10 text-primary` + `text-xl
+ *    font-semibold text-foreground`.
+ *  - Preview page canvas: `bg-[#f8fafc]` (slate-50) — the app page background.
  *  - Loaders: "Pulse Ring" — a scaling fading ring for busy states.
  *
- * Streamy mapping: JokoUI's Tailwind palette is indigo/green/yellow/red on slate. Streamy's
- * locked console palette (on-air red / signal green / amber) keeps its hue identity but adopts
- * the JokoUI *structures*: pill+dot status badges, soft two-tone fills, tinted alert cards,
- * pulse-ring loaders. Sizes follow the library: badges px-3/py-1 (12/4dp), buttons px-6/py-3
- * (24/12dp), rounded-lg (8dp), border-2 (2dp) on outline variants.
+ * Streamy mapping: lime-600 primary, slate neutrals, broadcast semantic hues (on-air
+ * red-600 / live green-600 / amber-600) for the tally states. Light-first: slate-50 page,
+ * white cards — the background is never shiny white.
  */
 
-/** JokoUI "Dot Badge": gray pill, colored dot, label. The console status language. */
+/** JokoUI dot badge: soft-tinted pill, colored dot, label. The console status language. */
 @Composable
 fun JokoDotBadge(
     text: String,
@@ -80,7 +85,7 @@ fun JokoDotBadge(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier
             .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(dotColor.copy(alpha = 0.10f))
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Box(
@@ -93,7 +98,7 @@ fun JokoDotBadge(
             text,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -118,8 +123,8 @@ fun JokoSoftBadge(
 }
 
 /**
- * JokoUI "Alert": tinted container, 1dp tinted border, dot marker + message.
- * Maps Streamy hints (dropped frames, restart-to-apply, recorder errors) to this structure.
+ * JokoUI alert: soft tinted container + 1dp tinted border + dot marker + message.
+ * Info/success/warning/error map to lime/green/amber/red soft fills.
  */
 @Composable
 fun JokoAlert(
@@ -146,12 +151,12 @@ fun JokoAlert(
             text,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
-            color = color,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
 
-/** jokoui Primary: solid slab, rounded-lg — the console hero. */
+/** JokoUI primary: `px-6 py-3 bg-lime-600 text-white font-semibold rounded-lg shadow-md`. */
 @Composable
 fun JokoPrimaryButton(
     text: String,
@@ -170,17 +175,20 @@ fun JokoPrimaryButton(
             containerColor = container,
             contentColor = contentColor,
             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            disabledContentColor = MaterialTheme.colorScheme.outlineVariant,
         ),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(
             horizontal = 24.dp, vertical = verticalPadding,
         ),
-        modifier = modifier,
+        modifier = modifier.shadow(
+            elevation = if (enabled) 4.dp else 0.dp,
+            shape = RoundedCornerShape(8.dp),
+        ),
     ) {
         Text(
             text,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Black,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
@@ -189,33 +197,166 @@ private val defaultButtonPadding = androidx.compose.foundation.layout.PaddingVal
     horizontal = 24.dp, vertical = 12.dp,
 )
 
-/** jokoui Outline: 2dp border, tinted text; Material ripple covers the press fill. */
+/** JokoUI outline: `border-2 border-lime-600 text-lime-600` (2dp border, tinted text). */
 @Composable
 fun JokoOutlineButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    color: Color = MaterialTheme.colorScheme.onSurface,
+    color: Color = MaterialTheme.colorScheme.primary,
 ) {
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
-        border = androidx.compose.foundation.BorderStroke(2.dp, color.copy(alpha = 0.55f)),
+        border = BorderStroke(2.dp, color.copy(alpha = if (enabled) 1f else 0.4f)),
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = color,
-            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            disabledContentColor = MaterialTheme.colorScheme.outlineVariant,
         ),
         contentPadding = defaultButtonPadding,
         modifier = modifier,
     ) {
         Text(
             text,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
         )
     }
+}
+
+/** JokoUI secondary: `bg-gray-100 text-gray-800 font-semibold rounded-lg shadow-md`. */
+@Composable
+fun JokoSecondaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            disabledContentColor = MaterialTheme.colorScheme.outlineVariant,
+        ),
+        contentPadding = defaultButtonPadding,
+        modifier = modifier.shadow(
+            elevation = if (enabled) 4.dp else 0.dp,
+            shape = RoundedCornerShape(8.dp),
+        ),
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+/**
+ * JokoUI simple card: `rounded-xl border border-border bg-card` — white card floating on
+ * the slate page. Title `text-xl font-semibold`, body `text-muted-foreground`.
+ */
+@Composable
+fun JokoCard(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(elevation = 2.dp, shape = RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        content = { content() },
+    )
+}
+
+/**
+ * JokoUI section head: numbered `w-8 h-8 rounded-full bg-primary/10 text-primary` dot +
+ * `text-xl font-semibold text-foreground` title — the docs-page section rhythm.
+ */
+@Composable
+fun JokoSectionHead(
+    index: Int,
+    title: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+        ) {
+            Text(
+                "$index",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Text(
+            title,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+    }
+}
+
+/** JokoUI stat line: mono value + muted label — the console readout inside cards. */
+@Composable
+fun JokoStat(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            value,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** JokoUI page eyebrow: `px-3 py-1 rounded-full bg-primary/10 text-primary` pill. */
+@Composable
+fun JokoEyebrow(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.2.sp,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f))
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+    )
 }
 
 /** JokoUI "Pulse Ring" loader: scaling, fading ring — busy states (Connecting, etc.). */
