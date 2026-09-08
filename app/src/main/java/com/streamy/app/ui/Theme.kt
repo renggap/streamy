@@ -242,9 +242,11 @@ private val StreamyTypography = Typography(
 // ---- Shapes ----
 // JokoUI card language: `rounded-xl` (12dp) cards, `rounded-lg` (8dp) controls,
 // `rounded-full` pills. M3 mapped: large cards, medium/small controls, extraSmall chips.
+// extraSmall = 6dp (NOT 50): M3 DropdownMenu/side sheets pick extraSmall, and a 50% pill
+// ovals the menu panel and clips item text at the corners. Pills stay explicit at call sites.
 
 private val StreamyShapes = Shapes(
-    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(50),
+    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(6.dp),
     small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
     medium = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
     large = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
