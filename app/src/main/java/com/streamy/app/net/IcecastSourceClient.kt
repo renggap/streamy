@@ -40,9 +40,12 @@ class IcecastSourceClient(
     override fun connect(bitrateKbps: Int, name: String, genre: String) {
         try { socket?.close() } catch (_: Throwable) {}
         socket = null; out = null; metaStream = null
+        // Same as UvoxClient: unqualified `port` inside Socket.apply{} binds to Socket.getPort()
+        // (=0, unconnected) instead of the constructor param — connect would hit host:0.
+        val addr = InetSocketAddress(host, port)
         val s = Socket().apply {
             tcpNoDelay = true
-            connect(InetSocketAddress(host, port), HANDSHAKE_TIMEOUT_MS)
+            connect(addr, HANDSHAKE_TIMEOUT_MS)
             soTimeout = HANDSHAKE_TIMEOUT_MS
         }
         try {

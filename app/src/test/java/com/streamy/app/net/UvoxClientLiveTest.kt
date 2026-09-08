@@ -126,7 +126,10 @@ class UvoxClientLiveTest {
     }
 
     private fun statsField(host: String, port: Int, tag: String): String? = try {
-        val xml = (URL("http://$host:$port/stats?sid=1").openConnection() as HttpURLConnection)
+        // DNAS serves /stats on the PUBLIC portbase, which is usually the source port - 1.
+        // STREAMY_LIVE_STATS_PORT overrides when the two differ.
+        val statsPort = System.getenv("STREAMY_LIVE_STATS_PORT")?.toIntOrNull() ?: (port - 1)
+        val xml = (URL("http://$host:$statsPort/stats?sid=1").openConnection() as HttpURLConnection)
             .apply { connectTimeout = 5_000; readTimeout = 5_000 }
             .inputStream.use { it.readBytes() }.toString(Charsets.UTF_8)
         val lo = xml.indexOf("<$tag>") + tag.length + 2

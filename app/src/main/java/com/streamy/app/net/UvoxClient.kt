@@ -54,10 +54,14 @@ class UvoxClient(
         // Close any prior socket so a reconnect never leaks.
         try { socket?.close() } catch (_: Throwable) {}
         socket = null; out = null
+        // Resolve the address BEFORE the Socket apply-scope: inside `Socket().apply { ... }` an
+        // unqualified `port` binds to Socket.getPort() — 0 on an unconnected socket — silently
+        // connecting to host:0 (instant refusal). Live-verified regression against DNAS2 2.6.
+        val addr = InetSocketAddress(host, port)
         val s = Socket().apply {
             tcpNoDelay = true
             keepAlive = true
-            connect(InetSocketAddress(host, port), HANDSHAKE_TIMEOUT_MS)
+            connect(addr, HANDSHAKE_TIMEOUT_MS)
             soTimeout = HANDSHAKE_TIMEOUT_MS
         }
         try {
