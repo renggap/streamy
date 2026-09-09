@@ -15,7 +15,7 @@
   <meta name="twitter:card" content="summary" />
 
   <!-- Favicon: red tally dot on warm cream -->
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23F7F2E9'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23E02D24'/%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23F7F2E9'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%2365A30D'/%3E%3C/svg%3E" />
 
   <!-- Tailwind Play CDN (JokoUI komponen = Tailwind murni, tanpa build step) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -26,8 +26,8 @@
         extend: {
           colors: {
             brand: {
-              red: '#E02D24',        /* aksen on-air */
-              reddark: '#B7231B',
+              lime: '#65A30D',        /* aksen JokoUI lime-600 */
+              limedark: '#4D7C0F',     /* lime-700 untuk hover */
               cream: '#F7F2E9',      /* kertas hangat */
               cream2: '#FDFBF6',     /* kartu */
               sand: '#EDE5D6',       /* permukaan sekunder */
@@ -48,7 +48,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
 </head>
-<body class="bg-brand-cream text-brand-ink font-body antialiased" style="background-image: radial-gradient(50% 40% at 15% -5%, rgba(224,45,36,0.06), transparent 70%), radial-gradient(45% 35% at 95% 5%, rgba(224,45,36,0.05), transparent 72%);">
+<body class="bg-brand-cream text-brand-ink font-body antialiased" style="background-image: radial-gradient(50% 40% at 15% -5%, rgba(101,163,13,0.06), transparent 70%), radial-gradient(45% 35% at 95% 5%, rgba(101,163,13,0.05), transparent 72%);">
 
 <!-- ==================== NAVBAR (JokoUI Simple Header, dimodifikasi) ==================== -->
 <header class="sticky top-0 z-50 bg-brand-cream/80 backdrop-blur border-b border-brand-ink/10">
@@ -56,17 +56,17 @@
     <nav class="flex items-center justify-between h-16">
       <a href="/" class="flex items-center gap-2.5 shrink-0">
         <span class="relative flex h-3 w-3">
-          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-40"></span>
-          <span class="relative inline-flex rounded-full h-3 w-3 bg-brand-red"></span>
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-lime-600 opacity-40"></span>
+          <span class="relative inline-flex rounded-full h-3 w-3 bg-lime-600"></span>
         </span>
         <span class="font-display font-bold text-xl tracking-tight">Streamy</span>
       </a>
       <div class="hidden md:flex items-center gap-8">
-        <a href="/android/" class="text-sm font-medium text-brand-ink2 hover:text-brand-red transition-colors">Android</a>
-        <a href="/desktop/" class="text-sm font-medium text-brand-ink2 hover:text-brand-red transition-colors">Desktop</a>
-        <a href="/panel/" class="text-sm font-medium text-brand-ink2 hover:text-brand-red transition-colors">Panel</a>
+        <a href="/android/" class="text-sm font-medium text-brand-ink2 hover:text-lime-600 transition-colors">Android</a>
+        <a href="/desktop/" class="text-sm font-medium text-brand-ink2 hover:text-lime-600 transition-colors">Desktop</a>
+        <a href="/panel/" class="text-sm font-medium text-brand-ink2 hover:text-lime-600 transition-colors">Panel</a>
       </div>
-      <a href="#produk" class="inline-flex items-center px-4 py-2 bg-brand-red text-white text-sm font-semibold rounded-lg hover:bg-brand-reddark transition-colors shadow-sm">
+      <a href="#produk" class="inline-flex items-center px-4 py-2 bg-lime-600 text-white text-sm font-semibold rounded-lg hover:bg-lime-700 transition-colors shadow-sm">
         Jelajahi Produk
       </a>
     </nav>
@@ -77,21 +77,21 @@
   <!-- ==================== HERO (JokoUI Simple Hero) ==================== -->
   <section class="py-20 md:py-28 px-6">
     <div class="max-w-4xl mx-auto text-center">
-      <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-brand-red/30 bg-brand-red/5 text-brand-red text-xs font-mono font-medium tracking-wide uppercase mb-8">
-        <span class="w-2 h-2 rounded-full bg-brand-red animate-pulse"></span> On Air
+      <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-lime-600/30 bg-lime-600/5 text-lime-600 text-xs font-mono font-medium tracking-wide uppercase mb-8">
+        <span class="w-2 h-2 rounded-full bg-lime-600 animate-pulse"></span> On Air
       </span>
       <h1 class="text-4xl md:text-6xl font-display font-bold tracking-tight mb-6">
         Stasiun radio internet Anda,
-        <span class="text-brand-red">lengkap</span>.
+        <span class="text-lime-600">lengkap</span>.
       </h1>
       <p class="text-lg md:text-xl text-brand-ink2 mb-10 max-w-2xl mx-auto leading-relaxed">
         Bersiaran dari ponsel Android, dari komputer, dan kelola semua stasiun Anda dari satu panel. Tiga produk, satu ekosistem siaran.
       </p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="#produk" class="px-8 py-4 bg-brand-red text-white font-semibold rounded-lg hover:bg-brand-reddark transition-colors shadow-lg shadow-brand-red/20">
+        <a href="#produk" class="px-8 py-4 bg-lime-600 text-white font-semibold rounded-lg hover:bg-lime-700 transition-colors shadow-lg shadow-lime-600/20">
           Lihat Tiga Produknya
         </a>
-        <a href="#ekosistem" class="px-8 py-4 border-2 border-brand-ink/15 text-brand-ink font-semibold rounded-lg hover:border-brand-red hover:text-brand-red transition-colors">
+        <a href="#ekosistem" class="px-8 py-4 border-2 border-brand-ink/15 text-brand-ink font-semibold rounded-lg hover:border-lime-600 hover:text-lime-600 transition-colors">
           Cara Ekosistemnya Bekerja
         </a>
       </div>
@@ -102,49 +102,49 @@
   <section id="produk" class="py-16 md:py-24 px-6">
     <div class="max-w-6xl mx-auto">
       <div class="text-center max-w-2xl mx-auto mb-14">
-        <p class="text-sm font-mono font-medium text-brand-red tracking-wider uppercase mb-3">Produk</p>
+        <p class="text-sm font-mono font-medium text-lime-600 tracking-wider uppercase mb-3">Produk</p>
         <h2 class="text-3xl md:text-4xl font-display font-bold tracking-tight">Tiga alat, satu alur siaran.</h2>
         <p class="mt-4 text-lg text-brand-ink2">Mulai dari mana saja. Semuanya berbicara bahasa yang sama: SHOUTcast v2.</p>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
         <!-- Streamy Android -->
-        <a href="/android/" class="group flex flex-col bg-brand-cream2 rounded-2xl border border-brand-ink/10 p-7 transition-all duration-200 hover:-translate-y-1 hover:border-brand-red/40 hover:shadow-xl hover:shadow-brand-red/10">
-          <div class="w-12 h-12 bg-brand-red/10 rounded-xl flex items-center justify-center mb-5">
-            <svg class="w-6 h-6 text-brand-red" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.7-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24a11.46 11.46 0 00-4.94 0L9.65 5.67c-.19-.29-.58-.38-.87-.2-.28.18-.37.54-.22.83L10.4 9.48C7.87 10.78 6.12 13.2 6 16h12c-.12-2.8-1.87-5.22-4.4-6.52zM9 13.5a1 1 0 110-2 1 1 0 010 2zm6 0a1 1 0 110-2 1 1 0 010 2z"/><path d="M4.5 17.5h15v3a1 1 0 01-1 1h-13a1 1 0 01-1-1v-3zM4 10.5h16a.5.5 0 01.5.5v6a.5.5 0 01-1 0v-5.5h-15V17a.5.5 0 01-1 0v-6a.5.5 0 01.5-.5z" opacity=".55"/><path d="M6 17.5h12v3.5H6z" opacity=".35"/></svg>
+        <a href="/android/" class="group flex flex-col bg-brand-cream2 rounded-2xl border border-brand-ink/10 p-7 transition-all duration-200 hover:-translate-y-1 hover:border-lime-600/40 hover:shadow-xl hover:shadow-lime-600/10">
+          <div class="w-12 h-12 bg-lime-100 rounded-xl flex items-center justify-center mb-5">
+            <svg class="w-6 h-6 text-lime-600" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.7-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24a11.46 11.46 0 00-4.94 0L9.65 5.67c-.19-.29-.58-.38-.87-.2-.28.18-.37.54-.22.83L10.4 9.48C7.87 10.78 6.12 13.2 6 16h12c-.12-2.8-1.87-5.22-4.4-6.52zM9 13.5a1 1 0 110-2 1 1 0 010 2zm6 0a1 1 0 110-2 1 1 0 010 2z"/><path d="M4.5 17.5h15v3a1 1 0 01-1 1h-13a1 1 0 01-1-1v-3zM4 10.5h16a.5.5 0 01.5.5v6a.5.5 0 01-1 0v-5.5h-15V17a.5.5 0 01-1 0v-6a.5.5 0 01.5-.5z" opacity=".55"/><path d="M6 17.5h12v3.5H6z" opacity=".35"/></svg>
           </div>
           <p class="font-mono text-xs text-brand-ink2/70 tracking-wider uppercase mb-1">Sumber siaran · Ponsel</p>
-          <h3 class="text-xl font-display font-bold mb-2">Streamy <span class="text-brand-red">Android</span></h3>
+          <h3 class="text-xl font-display font-bold mb-2">Streamy <span class="text-lime-600">Android</span></h3>
           <p class="text-sm text-brand-ink2 leading-relaxed mb-6">Suara Anda langsung ke server SHOUTcast v2 dari kantong Anda. Tetap siaran di latar belakang, bahkan saat layar mati.</p>
-          <span class="mt-auto inline-flex items-center gap-1.5 text-sm font-semibold text-brand-red">
+          <span class="mt-auto inline-flex items-center gap-1.5 text-sm font-semibold text-lime-600">
             Pelajari
             <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
           </span>
         </a>
 
         <!-- Streamy Desktop -->
-        <a href="/desktop/" class="group flex flex-col bg-brand-cream2 rounded-2xl border border-brand-ink/10 p-7 transition-all duration-200 hover:-translate-y-1 hover:border-brand-red/40 hover:shadow-xl hover:shadow-brand-red/10">
-          <div class="w-12 h-12 bg-brand-red/10 rounded-xl flex items-center justify-center mb-5">
-            <svg class="w-6 h-6 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17.25v1.5a1.5 1.5 0 01-1.5 1.5h6a1.5 1.5 0 01-1.5-1.5v-1.5m-10.5-3h16.5a1.5 1.5 0 001.5-1.5v-7.5a1.5 1.5 0 00-1.5-1.5h-16.5a1.5 1.5 0 00-1.5 1.5v7.5a1.5 1.5 0 001.5 1.5z"/></svg>
+        <a href="/desktop/" class="group flex flex-col bg-brand-cream2 rounded-2xl border border-brand-ink/10 p-7 transition-all duration-200 hover:-translate-y-1 hover:border-lime-600/40 hover:shadow-xl hover:shadow-lime-600/10">
+          <div class="w-12 h-12 bg-lime-100 rounded-xl flex items-center justify-center mb-5">
+            <svg class="w-6 h-6 text-lime-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17.25v1.5a1.5 1.5 0 01-1.5 1.5h6a1.5 1.5 0 01-1.5-1.5v-1.5m-10.5-3h16.5a1.5 1.5 0 001.5-1.5v-7.5a1.5 1.5 0 00-1.5-1.5h-16.5a1.5 1.5 0 00-1.5 1.5v7.5a1.5 1.5 0 001.5 1.5z"/></svg>
           </div>
           <p class="font-mono text-xs text-brand-ink2/70 tracking-wider uppercase mb-1">Studio siaran · Komputer</p>
-          <h3 class="text-xl font-display font-bold mb-2">Streamy <span class="text-brand-red">Desktop</span></h3>
+          <h3 class="text-xl font-display font-bold mb-2">Streamy <span class="text-lime-600">Desktop</span></h3>
           <p class="text-sm text-brand-ink2 leading-relaxed mb-6">Decker ganda bergaya Winamp: playlist, EQ, crossfader, mikrofon dengan auto-duck. Siaran MP3/AAC ke SHOUTcast v2 dan Icecast.</p>
-          <span class="mt-auto inline-flex items-center gap-1.5 text-sm font-semibold text-brand-red">
+          <span class="mt-auto inline-flex items-center gap-1.5 text-sm font-semibold text-lime-600">
             Pelajari
             <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
           </span>
         </a>
 
         <!-- Streamy Panel -->
-        <a href="/panel/" class="group flex flex-col bg-brand-cream2 rounded-2xl border border-brand-ink/10 p-7 transition-all duration-200 hover:-translate-y-1 hover:border-brand-red/40 hover:shadow-xl hover:shadow-brand-red/10">
-          <div class="w-12 h-12 bg-brand-red/10 rounded-xl flex items-center justify-center mb-5">
-            <svg class="w-6 h-6 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12h4l3-9 4 18 3-9h4"/></svg>
+        <a href="/panel/" class="group flex flex-col bg-brand-cream2 rounded-2xl border border-brand-ink/10 p-7 transition-all duration-200 hover:-translate-y-1 hover:border-lime-600/40 hover:shadow-xl hover:shadow-lime-600/10">
+          <div class="w-12 h-12 bg-lime-100 rounded-xl flex items-center justify-center mb-5">
+            <svg class="w-6 h-6 text-lime-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12h4l3-9 4 18 3-9h4"/></svg>
           </div>
           <p class="font-mono text-xs text-brand-ink2/70 tracking-wider uppercase mb-1">Sisi server · Stasiun</p>
-          <h3 class="text-xl font-display font-bold mb-2">Streamy <span class="text-brand-red">Panel</span></h3>
+          <h3 class="text-xl font-display font-bold mb-2">Streamy <span class="text-lime-600">Panel</span></h3>
           <p class="text-sm text-brand-ink2 leading-relaxed mb-6">Panel kendali stasiun radio yang Anda host sendiri: AutoDJ, media library, jadwal, DJ, dan statistik pendengar. Tanpa vendor.</p>
-          <span class="mt-auto inline-flex items-center gap-1.5 text-sm font-semibold text-brand-red">
+          <span class="mt-auto inline-flex items-center gap-1.5 text-sm font-semibold text-lime-600">
             Pelajari
             <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
           </span>
@@ -157,29 +157,29 @@
   <section id="ekosistem" class="py-16 md:py-24 px-6 bg-brand-sand/60">
     <div class="max-w-6xl mx-auto">
       <div class="text-center max-w-2xl mx-auto mb-14">
-        <p class="text-sm font-mono font-medium text-brand-red tracking-wider uppercase mb-3">Ekosistem</p>
+        <p class="text-sm font-mono font-medium text-lime-600 tracking-wider uppercase mb-3">Ekosistem</p>
         <h2 class="text-3xl md:text-4xl font-display font-bold tracking-tight">Dari suara Anda ke pendengar mereka.</h2>
         <p class="mt-4 text-lg text-brand-ink2">Setiap produk mengisi satu peran. Gabungkan sesuai kebutuhan stasiun Anda.</p>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
-          <p class="font-mono text-xs font-semibold text-brand-red mb-3">01 · Sumber</p>
+          <p class="font-mono text-xs font-semibold text-lime-600 mb-3">01 · Sumber</p>
           <h3 class="font-display font-bold mb-2">Anda siaran</h3>
           <p class="text-sm text-brand-ink2 leading-relaxed">Bicara lewat <strong class="text-brand-ink">Streamy Android</strong>, atau mix musik dan mikrofon lewat <strong class="text-brand-ink">Streamy Desktop</strong>.</p>
         </div>
         <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
-          <p class="font-mono text-xs font-semibold text-brand-red mb-3">02 · Enkode &amp; kirim</p>
+          <p class="font-mono text-xs font-semibold text-lime-600 mb-3">02 · Enkode &amp; kirim</p>
           <h3 class="font-display font-bold mb-2">Audio mengalir</h3>
           <p class="text-sm text-brand-ink2 leading-relaxed">Suara dipadatkan menjadi MP3 atau AAC, lalu dikirim ke server lewat protokol sumber SHOUTcast v2 yang asli.</p>
         </div>
         <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
-          <p class="font-mono text-xs font-semibold text-brand-red mb-3">03 · Server</p>
+          <p class="font-mono text-xs font-semibold text-lime-600 mb-3">03 · Server</p>
           <h3 class="font-display font-bold mb-2">Panel yang mengelola</h3>
           <p class="text-sm text-brand-ink2 leading-relaxed"><strong class="text-brand-ink">Streamy Panel</strong> menjalankan stasiun: AutoDJ mengisi siaran saat Anda tidak live, jadwal dan DJ diatur dari satu tempat.</p>
         </div>
         <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
-          <p class="font-mono text-xs font-semibold text-brand-red mb-3">04 · Pendengar</p>
+          <p class="font-mono text-xs font-semibold text-lime-600 mb-3">04 · Pendengar</p>
           <h3 class="font-display font-bold mb-2">Dunia mendengarkan</h3>
           <p class="text-sm text-brand-ink2 leading-relaxed">Siapa pun yang tersambung ke stasiun Anda mendengar siaran, langsung dan tanpa jeda.</p>
         </div>
@@ -196,15 +196,15 @@
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 text-center">
         <div class="sm:border-r border-brand-ink/10">
-          <div class="text-4xl font-display font-bold text-brand-red mb-2">SHOUTcast&nbsp;v2</div>
+          <div class="text-4xl font-display font-bold text-lime-600 mb-2">SHOUTcast&nbsp;v2</div>
           <div class="text-sm font-medium text-brand-ink2 uppercase tracking-wider">Protokol asli, teruji</div>
         </div>
         <div class="sm:border-r border-brand-ink/10">
-          <div class="text-4xl font-display font-bold text-brand-red mb-2">Auto-reconnect</div>
+          <div class="text-4xl font-display font-bold text-lime-600 mb-2">Auto-reconnect</div>
           <div class="text-sm font-medium text-brand-ink2 uppercase tracking-wider">Siaran bertahan putus</div>
         </div>
         <div>
-          <div class="text-4xl font-display font-bold text-brand-red mb-2">Milik Anda</div>
+          <div class="text-4xl font-display font-bold text-lime-600 mb-2">Milik Anda</div>
           <div class="text-sm font-medium text-brand-ink2 uppercase tracking-wider">Server Anda, data Anda</div>
         </div>
       </div>
@@ -213,13 +213,13 @@
 
   <!-- ==================== CTA PENUTUP (JokoUI Minimal CTA) ==================== -->
   <section class="py-16 md:py-24 px-6">
-    <div class="max-w-4xl mx-auto text-center bg-brand-cream2 rounded-3xl border border-brand-ink/10 px-8 py-14" style="background-image: radial-gradient(60% 80% at 50% 0%, rgba(224,45,36,0.05), transparent);">
+    <div class="max-w-4xl mx-auto text-center bg-brand-cream2 rounded-3xl border border-brand-ink/10 px-8 py-14" style="background-image: radial-gradient(60% 80% at 50% 0%, rgba(101,163,13,0.05), transparent);">
       <h2 class="text-3xl md:text-4xl font-display font-bold tracking-tight mb-4">Siap naik udara?</h2>
       <p class="text-lg text-brand-ink2 mb-8 max-w-xl mx-auto">Pilih perangkat Anda dan mulai bersiaran. Semuanya dirancang untuk bekerja bersama, tapi berguna sendiri-sendiri.</p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="/android/" class="px-8 py-4 bg-brand-red text-white font-semibold rounded-lg hover:bg-brand-reddark transition-colors shadow-lg shadow-brand-red/20">Siaran dari Ponsel</a>
+        <a href="/android/" class="px-8 py-4 bg-lime-600 text-white font-semibold rounded-lg hover:bg-lime-700 transition-colors shadow-lg shadow-lime-600/20">Siaran dari Ponsel</a>
         <a href="/desktop/" class="px-8 py-4 bg-brand-ink text-brand-cream font-semibold rounded-lg hover:opacity-90 transition-opacity">Siaran dari Komputer</a>
-        <a href="/panel/" class="px-8 py-4 border-2 border-brand-ink/15 font-semibold rounded-lg hover:border-brand-red hover:text-brand-red transition-colors">Kelola Stasiun</a>
+        <a href="/panel/" class="px-8 py-4 border-2 border-brand-ink/15 font-semibold rounded-lg hover:border-lime-600 hover:text-lime-600 transition-colors">Kelola Stasiun</a>
       </div>
     </div>
   </section>
@@ -229,13 +229,13 @@
 <footer class="py-10 px-6 border-t border-brand-ink/10">
   <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
     <div class="flex items-center gap-2.5">
-      <span class="w-2.5 h-2.5 rounded-full bg-brand-red"></span>
+      <span class="w-2.5 h-2.5 rounded-full bg-lime-600"></span>
       <span class="font-display font-bold">Streamy</span>
     </div>
     <div class="flex gap-8">
-      <a href="/android/" class="text-sm text-brand-ink2 hover:text-brand-red transition-colors">Android</a>
-      <a href="/desktop/" class="text-sm text-brand-ink2 hover:text-brand-red transition-colors">Desktop</a>
-      <a href="/panel/" class="text-sm text-brand-ink2 hover:text-brand-red transition-colors">Panel</a>
+      <a href="/android/" class="text-sm text-brand-ink2 hover:text-lime-600 transition-colors">Android</a>
+      <a href="/desktop/" class="text-sm text-brand-ink2 hover:text-lime-600 transition-colors">Desktop</a>
+      <a href="/panel/" class="text-sm text-brand-ink2 hover:text-lime-600 transition-colors">Panel</a>
     </div>
     <p class="text-sm text-brand-ink2/80">© 2026 Streamy · <span class="font-mono text-xs">streamy-app.pages.dev</span></p>
   </div>
