@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Streamy Android — Siaran langsung dari ponsel Anda</title>
+  <meta name="description" content="Streamy Android menyiarkan suara Anda langsung ke server radio internet SHOUTcast v2 — dan tetap bersiaran di latar belakang, bahkan saat layar mati." />
+  <meta name="theme-color" content="#F7F2E9" />
+  <link rel="canonical" href="https://streamy-app.pages.dev/android/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://streamy-app.pages.dev/android/" />
+  <meta property="og:title" content="Streamy Android — Siaran langsung dari ponsel Anda" />
+  <meta property="og:description" content="Suaranya langsung dari ponsel Android Anda, disiarkan ke server radio internet SHOUTcast v2. Tetap bersiaran di latar belakang." />
+  <meta name="twitter:card" content="summary" />
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23F7F2E9'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23E02D24'/%3E%3C/svg%3E" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              red: '#E02D24',
+              reddark: '#B7231B',
+              cream: '#F7F2E9',
+              cream2: '#FDFBF6',
+              sand: '#EDE5D6',
+              ink: '#241F1A',
+              ink2: '#5C554C'
+            }
+          },
+          fontFamily: {
+            display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+            body: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body class="bg-brand-cream text-brand-ink font-body antialiased" style="background-image: radial-gradient(50% 40% at 15% -5%, rgba(224,45,36,0.06), transparent 70%), radial-gradient(45% 35% at 95% 5%, rgba(224,45,36,0.05), transparent 72%);">
+
+<!-- ==================== NAVBAR ==================== -->
+<header class="sticky top-0 z-50 bg-brand-cream/80 backdrop-blur border-b border-brand-ink/10">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6">
+    <nav class="flex items-center justify-between h-16">
+      <a href="/" class="flex items-center gap-2.5 shrink-0">
+        <span class="w-3 h-3 rounded-full bg-brand-red"></span>
+        <span class="font-display font-bold text-xl tracking-tight">Streamy</span>
+      </a>
+      <div class="hidden md:flex items-center gap-8">
+        <a href="/android/" class="text-sm font-semibold text-brand-red" aria-current="page">Android</a>
+        <a href="/desktop/" class="text-sm font-medium text-brand-ink2 hover:text-brand-red transition-colors">Desktop</a>
+        <a href="/panel/" class="text-sm font-medium text-brand-ink2 hover:text-brand-red transition-colors">Panel</a>
+      </div>
+      <a href="#cara-kerja" class="inline-flex items-center px-4 py-2 bg-brand-red text-white text-sm font-semibold rounded-lg hover:bg-brand-reddark transition-colors shadow-sm">
+        Cara Kerja
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ==================== HERO ==================== -->
+  <section class="py-20 md:py-28 px-6">
+    <div class="max-w-4xl mx-auto text-center">
+      <p class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-brand-red/30 bg-brand-red/5 text-brand-red text-xs font-mono font-medium tracking-wide uppercase mb-8">
+        <span class="w-2 h-2 rounded-full bg-brand-red animate-pulse"></span> Streamy Android · v1.0.0
+      </p>
+      <h1 class="text-4xl md:text-6xl font-display font-bold tracking-tight mb-6">
+        Siaran langsung dari <span class="text-brand-red">ponsel</span> Anda.
+      </h1>
+      <p class="text-lg md:text-xl text-brand-ink2 mb-10 max-w-2xl mx-auto leading-relaxed">
+        Streamy Android mengirim <strong class="text-brand-ink">suara Anda secara langsung</strong> ke server radio internet SHOUTcast — dan tetap bersiaran meski layar mati.
+      </p>
+
+      <!-- Osiloskop: jejak siaran beku dengan cahaya fosfor. SVG murni. -->
+      <figure class="max-w-2xl mx-auto rounded-2xl border border-brand-ink/10 bg-brand-cream2 p-5 shadow-sm" aria-label="Osiloskop gelombang suara langsung">
+        <svg viewBox="0 0 1000 110" role="img" aria-hidden="true" class="w-full h-auto">
+          <g stroke="rgba(36,31,26,0.12)" stroke-width="1">
+            <line x1="0" y1="20" x2="1000" y2="20" />
+            <line x1="0" y1="90" x2="1000" y2="90" />
+            <line x1="250" y1="6" x2="250" y2="104" />
+            <line x1="500" y1="6" x2="500" y2="104" />
+            <line x1="750" y1="6" x2="750" y2="104" />
+          </g>
+          <line x1="0" y1="55" x2="1000" y2="55" stroke="rgba(36,31,26,0.25)" stroke-width="1" stroke-dasharray="3 5" />
+          <polyline fill="none" stroke="#E02D24" stroke-width="2"
+            points="0,55 30,53 60,57 90,49 120,61 150,45 180,65 210,40 240,70 270,33 300,77 330,33 360,77 390,43 420,67 450,47 480,63 510,38 540,72 570,28 600,82 630,30 660,80 690,36 720,74 750,44 780,66 810,50 840,60 870,52 900,58 930,54 960,56 1000,55" />
+        </svg>
+        <figcaption class="mt-3 font-mono text-xs text-brand-ink2/70 tracking-wider uppercase">Sinyal mikrofon · waktu</figcaption>
+      </figure>
+
+      <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="#fitur" class="px-8 py-4 bg-brand-red text-white font-semibold rounded-lg hover:bg-brand-reddark transition-colors shadow-lg shadow-brand-red/20">Lihat Fitur</a>
+        <a href="#cara-kerja" class="px-8 py-4 border-2 border-brand-ink/15 font-semibold rounded-lg hover:border-brand-red hover:text-brand-red transition-colors">Cara Kerja</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== FITUR ==================== -->
+  <section id="fitur" class="py-16 md:py-24 px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <p class="text-sm font-mono font-medium text-brand-red tracking-wider uppercase mb-3">Fitur</p>
+        <h2 class="text-3xl md:text-4xl font-display font-bold tracking-tight">Dibuat untuk tetap siaran.</h2>
+        <p class="mt-4 text-lg text-brand-ink2">Semua di bawah ini hadir di v1.0.0 — ditulis untuk manusia, bukan protokol.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0-4a3 3 0 003-3V6a3 3 0 10-6 0v9a3 3 0 003 3z"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">Ke server radio sungguhan</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Protokol sumber SHOUTcast v2 yang asli — standar di balik ribuan stasiun radio internet. Teruji langsung terhadap DNAS 2.6.1.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19a3 3 0 11-6 0 3 3 0 016 0zm12-3a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">Kualitas audio pilihan Anda</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">MP3 dari 16 kbps yang ramah suara hingga 192 kbps kelas musik. Pilih bitrate, laju sampel, serta mono atau stereo.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">Tetap siaran di latar belakang</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Layanan latar depan menjaga mikrofon dan koneksi tetap hidup saat layar mati — dan menyambung ulang setelah sistem menutup aplikasi.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">Putus? Menyambung ulang otomatis</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Mencoba ulang otomatis dengan jeda yang makin lama antarpercobaan — ditambah tombol hentikan sekali sentuh saat Anda ingin berhenti.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">Judul now-playing, tanpa login admin</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Ketik judul lagu atau acara saat siaran, dan pendengar melihatnya seketika. Tanpa perlu kata sandi admin server.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12h2l2-6 3 12 3-9 2 6h6"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">Lihat suara Anda sebagai gelombang</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Osiloskop real-time dan meter VU yang digambar langsung dari sinyal mikrofon Anda, menyala seperti lampu tally siaran.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">Simpan beberapa stasiun</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Simpan profil untuk tiap server — host, port, kata sandi, dan pengaturan audio — lalu beralih di antaranya.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">Konsol yang terasa seperti konsol</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Desain lampu tally: tinta pekat, merah on-air, dan readout monospace. Dirancang agar enak dipakai di tengah siaran.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CARA KERJA ==================== -->
+  <section id="cara-kerja" class="py-16 md:py-24 px-6 bg-brand-sand/60">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <p class="text-sm font-mono font-medium text-brand-red tracking-wider uppercase mb-3">Cara Kerja</p>
+        <h2 class="text-3xl md:text-4xl font-display font-bold tracking-tight">Dari suara Anda ke telinga mereka.</h2>
+        <p class="mt-4 text-lg text-brand-ink2">Empat langkah, berjalan terus selama Anda siaran.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <p class="font-mono text-xs font-semibold text-brand-red mb-3">01</p>
+          <h3 class="font-display font-bold mb-2">Anda bicara</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Mikrofon ponsel Anda menangkap suara Anda.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <p class="font-mono text-xs font-semibold text-brand-red mb-3">02</p>
+          <h3 class="font-display font-bold mb-2">Streamy menyandikan</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Ia memampatkan suara Anda menjadi audio MP3 secara real-time.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <p class="font-mono text-xs font-semibold text-brand-red mb-3">03</p>
+          <h3 class="font-display font-bold mb-2">Dikirim ke server Anda</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Audio mengalir melalui internet menuju server SHOUTcast v2 Anda.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <p class="font-mono text-xs font-semibold text-brand-red mb-3">04</p>
+          <h3 class="font-display font-bold mb-2">Pendengar mendengarkan</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Siapa pun yang tersambung ke server itu mendengar Anda, secara langsung.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CATATAN PERUBAHAN ==================== -->
+  <section id="changelog" class="py-16 md:py-24 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <p class="text-sm font-mono font-medium text-brand-red tracking-wider uppercase mb-3">Catatan Perubahan</p>
+        <h2 class="text-3xl md:text-4xl font-display font-bold tracking-tight">Log transmisi.</h2>
+        <p class="mt-4 text-lg text-brand-ink2">Apa yang dirilis, dan apa yang diperbaiki sejak itu.</p>
+      </div>
+
+      <div class="rounded-2xl border border-brand-ink/10 overflow-hidden">
+        <div class="flex items-center justify-between gap-4 px-6 py-4 border-b border-brand-ink/10 bg-brand-cream2">
+          <span class="inline-flex items-center gap-2.5 font-mono text-xs font-semibold tracking-wider uppercase text-brand-ink2">
+            <span class="w-2 h-2 rounded-full bg-brand-red"></span> Catatan rilis
+          </span>
+          <span class="font-mono text-xs text-brand-ink2/70">streamy-app.pages.dev</span>
+        </div>
+        <div class="p-6 md:p-8 space-y-10 bg-brand-cream2/50">
+          <div>
+            <p class="mb-4"><span class="font-mono font-bold text-lg text-brand-red">v1.0.0</span> <span class="font-mono text-xs tracking-wider uppercase text-brand-ink2 ml-2">Rilis awal · 2026-07</span></p>
+            <ul class="space-y-2.5">
+              <li class="relative pl-6 text-sm text-brand-ink2 leading-relaxed"><span class="absolute left-0 font-mono font-bold text-brand-red">&gt;</span><strong class="text-brand-ink">Suara langsung → SHOUTcast v2</strong> melalui protokol sumber Ultravox 2.1 yang asli.</li>
+              <li class="relative pl-6 text-sm text-brand-ink2 leading-relaxed"><span class="absolute left-0 font-mono font-bold text-brand-red">&gt;</span><strong class="text-brand-ink">MP3</strong> pada 16, 24, 48, 64, 96, 128, dan 192 kbps.</li>
+              <li class="relative pl-6 text-sm text-brand-ink2 leading-relaxed"><span class="absolute left-0 font-mono font-bold text-brand-red">&gt;</span><strong class="text-brand-ink">Siaran latar belakang</strong> yang bertahan saat layar mati maupun saat aplikasi dikecilkan.</li>
+              <li class="relative pl-6 text-sm text-brand-ink2 leading-relaxed"><span class="absolute left-0 font-mono font-bold text-brand-red">&gt;</span><strong class="text-brand-ink">Penyambungan ulang otomatis</strong> dengan kendali hentikan secara manual.</li>
+              <li class="relative pl-6 text-sm text-brand-ink2 leading-relaxed"><span class="absolute left-0 font-mono font-bold text-brand-red">&gt;</span><strong class="text-brand-ink">Judul now-playing</strong> tanpa login admin server.</li>
+              <li class="relative pl-6 text-sm text-brand-ink2 leading-relaxed"><span class="absolute left-0 font-mono font-bold text-brand-red">&gt;</span><strong class="text-brand-ink">Meter VU osiloskop sungguhan</strong> di layar siaran.</li>
+              <li class="relative pl-6 text-sm text-brand-ink2 leading-relaxed"><span class="absolute left-0 font-mono font-bold text-brand-red">&gt;</span><strong class="text-brand-ink">Profil beberapa stasiun</strong> dengan pengaturan audio per profil.</li>
+              <li class="relative pl-6 text-sm text-brand-ink2 leading-relaxed"><span class="absolute left-0 font-mono font-bold text-brand-red">&gt;</span><strong class="text-brand-ink">Dropdown bitrate, laju sampel, dan kanal</strong>.</li>
+            </ul>
+            <p class="mt-4 font-mono text-xs text-brand-ink2/80">Catatan: enkoding AAC sudah diimplementasikan tetapi disembunyikan di rilis ini — sedang ditinjau ulang.</p>
+          </div>
+          <div>
+            <p class="mb-4"><span class="font-mono font-bold text-lg text-brand-ink">Perbaikan</span> <span class="font-mono text-xs tracking-wider uppercase text-brand-ink2 ml-2">Setelah v1.0.0</span></p>
+            <ul class="space-y-2.5">
+              <li class="relative pl-6 text-sm text-brand-ink2 leading-relaxed"><span class="absolute left-0 font-mono font-bold text-brand-red">&gt;</span>Audio bitrate rendah (16 / 24 kbps) kini melaporkan kualitasnya dengan benar.</li>
+              <li class="relative pl-6 text-sm text-brand-ink2 leading-relaxed"><span class="absolute left-0 font-mono font-bold text-brand-red">&gt;</span>Terhubung ke server berbasis Centova / sctrans2 (memakai kunci cipher milik tiap server).</li>
+              <li class="relative pl-6 text-sm text-brand-ink2 leading-relaxed"><span class="absolute left-0 font-mono font-bold text-brand-red">&gt;</span>Stabilitas AAC ditingkatkan lewat framing ADTS (sementara masih disembunyikan di UI).</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CTA LINTAS PRODUK ==================== -->
+  <section class="py-16 md:py-20 px-6">
+    <div class="max-w-4xl mx-auto text-center bg-brand-cream2 rounded-3xl border border-brand-ink/10 px-8 py-12" style="background-image: radial-gradient(60% 80% at 50% 0%, rgba(224,45,36,0.05), transparent);">
+      <h2 class="text-2xl md:text-3xl font-display font-bold tracking-tight mb-3">Butuh lebih dari satu suara?</h2>
+      <p class="text-brand-ink2 mb-8 max-w-xl mx-auto">Streamy Desktop membawa dekker ganda dan mikrofon ke komputer Anda. Streamy Panel mengelola stasiun di sisi server.</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="/desktop/" class="px-8 py-4 bg-brand-ink text-brand-cream font-semibold rounded-lg hover:opacity-90 transition-opacity">Lihat Streamy Desktop</a>
+        <a href="/panel/" class="px-8 py-4 border-2 border-brand-ink/15 font-semibold rounded-lg hover:border-brand-red hover:text-brand-red transition-colors">Lihat Streamy Panel</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="py-10 px-6 border-t border-brand-ink/10">
+  <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+    <div class="flex items-center gap-2.5">
+      <span class="w-2.5 h-2.5 rounded-full bg-brand-red"></span>
+      <span class="font-display font-bold">Streamy</span>
+    </div>
+    <div class="flex gap-8">
+      <a href="/android/" class="text-sm font-semibold text-brand-red" aria-current="page">Android</a>
+      <a href="/desktop/" class="text-sm text-brand-ink2 hover:text-brand-red transition-colors">Desktop</a>
+      <a href="/panel/" class="text-sm text-brand-ink2 hover:text-brand-red transition-colors">Panel</a>
+    </div>
+    <p class="text-sm text-brand-ink2/80">© 2026 Streamy · <span class="font-mono text-xs">streamy-app.pages.dev</span></p>
+  </div>
+</footer>
+
+</body>
+</html>

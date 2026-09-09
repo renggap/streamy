@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Streamy Panel — Kelola stasiun radio internet Anda sendiri</title>
+  <meta name="description" content="Streamy Panel adalah panel kendali radio internet yang Anda host sendiri: kelola stasiun SHOUTcast, AutoDJ, media library, jadwal, DJ, dan statistik pendengar — dari satu antarmuka." />
+  <meta name="theme-color" content="#F7F2E9" />
+  <link rel="canonical" href="https://streamy-app.pages.dev/panel/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://streamy-app.pages.dev/panel/" />
+  <meta property="og:title" content="Streamy Panel — Kelola stasiun radio internet Anda sendiri" />
+  <meta property="og:description" content="Panel kendali stasiun radio yang Anda host sendiri: AutoDJ, media library, jadwal, DJ, dan statistik pendengar. Tanpa vendor." />
+  <meta name="twitter:card" content="summary" />
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23F7F2E9'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23E02D24'/%3E%3C/svg%3E" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              red: '#E02D24',
+              reddark: '#B7231B',
+              cream: '#F7F2E9',
+              cream2: '#FDFBF6',
+              sand: '#EDE5D6',
+              ink: '#241F1A',
+              ink2: '#5C554C'
+            }
+          },
+          fontFamily: {
+            display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+            body: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body class="bg-brand-cream text-brand-ink font-body antialiased" style="background-image: radial-gradient(50% 40% at 15% -5%, rgba(224,45,36,0.06), transparent 70%), radial-gradient(45% 35% at 95% 5%, rgba(224,45,36,0.05), transparent 72%);">
+
+<!-- ==================== NAVBAR ==================== -->
+<header class="sticky top-0 z-50 bg-brand-cream/80 backdrop-blur border-b border-brand-ink/10">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6">
+    <nav class="flex items-center justify-between h-16">
+      <a href="/" class="flex items-center gap-2.5 shrink-0">
+        <span class="w-3 h-3 rounded-full bg-brand-red"></span>
+        <span class="font-display font-bold text-xl tracking-tight">Streamy</span>
+      </a>
+      <div class="hidden md:flex items-center gap-8">
+        <a href="/android/" class="text-sm font-medium text-brand-ink2 hover:text-brand-red transition-colors">Android</a>
+        <a href="/desktop/" class="text-sm font-medium text-brand-ink2 hover:text-brand-red transition-colors">Desktop</a>
+        <a href="/panel/" class="text-sm font-semibold text-brand-red" aria-current="page">Panel</a>
+      </div>
+      <a href="#fitur" class="inline-flex items-center px-4 py-2 bg-brand-red text-white text-sm font-semibold rounded-lg hover:bg-brand-reddark transition-colors shadow-sm">
+        Lihat Fitur
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ==================== HERO ==================== -->
+  <section class="py-20 md:py-28 px-6">
+    <div class="max-w-4xl mx-auto text-center">
+      <p class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-brand-red/30 bg-brand-red/5 text-brand-red text-xs font-mono font-medium tracking-wide uppercase mb-8">
+        <span class="w-2 h-2 rounded-full bg-brand-red animate-pulse"></span> Streamy Panel · Self-hosted
+      </p>
+      <h1 class="text-4xl md:text-6xl font-display font-bold tracking-tight mb-6">
+        Stasiun Anda, <span class="text-brand-red">server</span> Anda.
+      </h1>
+      <p class="text-lg md:text-xl text-brand-ink2 mb-10 max-w-2xl mx-auto leading-relaxed">
+        Streamy Panel adalah panel kendali radio internet yang dijalankan di server Anda sendiri: stasiun SHOUTcast, AutoDJ, jadwal, DJ, dan statistik pendengar — <strong class="text-brand-ink">tanpa vendor</strong>.
+      </p>
+
+      <!-- Ilustrasi baris stasiun: kartu status ala halaman stasiun. SVG murni. -->
+      <figure class="max-w-2xl mx-auto rounded-2xl border border-brand-ink/10 bg-brand-cream2 p-6 shadow-sm" aria-label="Ilustrasi daftar stasiun dengan status">
+        <div class="rounded-xl border border-brand-ink/10 bg-brand-cream divide-y divide-brand-ink/10 text-left">
+          <div class="flex items-center justify-between px-4 py-3">
+            <div class="flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span class="font-medium text-sm">Radio Kota</span>
+              <span class="font-mono text-xs text-brand-ink2/70">MP3 128k · :8000</span>
+            </div>
+            <span class="font-mono text-xs text-brand-ink2">42 pendengar</span>
+          </div>
+          <div class="flex items-center justify-between px-4 py-3">
+            <div class="flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-brand-red animate-pulse"></span>
+              <span class="font-medium text-sm">Malam Jazz <span class="ml-1 font-mono text-[10px] uppercase tracking-wider text-brand-red border border-brand-red/30 rounded-full px-1.5 py-0.5">Live DJ</span></span>
+              <span class="font-mono text-xs text-brand-ink2/70">AAC 96k · :8021</span>
+            </div>
+            <span class="font-mono text-xs text-brand-ink2">118 pendengar</span>
+          </div>
+          <div class="flex items-center justify-between px-4 py-3">
+            <div class="flex items-center gap-3">
+              <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+              <span class="font-medium text-sm text-brand-ink2">Radio Kampus <span class="ml-1 font-mono text-[10px] uppercase tracking-wider text-brand-ink2 border border-brand-ink/20 rounded-full px-1.5 py-0.5">Ditunda</span></span>
+              <span class="font-mono text-xs text-brand-ink2/70">MP3 64k · :8042</span>
+            </div>
+            <span class="font-mono text-xs text-brand-ink2">0 pendengar</span>
+          </div>
+        </div>
+        <figcaption class="mt-4 font-mono text-xs text-brand-ink2/70 tracking-wider uppercase">Status, format, dan pendengar — diperbarui tiap 15 detik</figcaption>
+      </figure>
+
+      <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="#fitur" class="px-8 py-4 bg-brand-red text-white font-semibold rounded-lg hover:bg-brand-reddark transition-colors shadow-lg shadow-brand-red/20">Lihat Fitur</a>
+        <a href="#teknis" class="px-8 py-4 border-2 border-brand-ink/15 font-semibold rounded-lg hover:border-brand-red hover:text-brand-red transition-colors">Detail Teknis</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== FITUR ==================== -->
+  <section id="fitur" class="py-16 md:py-24 px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <p class="text-sm font-mono font-medium text-brand-red tracking-wider uppercase mb-3">Fitur</p>
+        <h2 class="text-3xl md:text-4xl font-display font-bold tracking-tight">Semua yang stasiun butuhkan.</h2>
+        <p class="mt-4 text-lg text-brand-ink2">Dari AutoDJ sampai perizinan pengguna — di satu proses Node.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">Stasiun sebagai halaman utama</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Daftar stasiun dengan status, format, port, dan jumlah pendengar yang diperbarui otomatis tiap 15 detik. Mulai, hentikan, tunda — sekali klik.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19a3 3 0 11-6 0 3 3 0 016 0zm12-3a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">AutoDJ 24/7</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">sc_trans tersupervisi per stasiun: unggah media (kuota per stasiun), kelola playlist, dan atur rotasi terjadwal. Siaran tetap jalan saat tidak ada DJ.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">Jadwal &amp; stasiun live-only</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Matriks jadwal untuk rotasi AutoDJ. Stasiun live-only juga didukung: DJ tersambung langsung ke sc_serv tanpa AutoDJ.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">Kredensial &amp; ban DJ</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Kelola akun DJ per stasiun, lihat daftar pendengar yang tersambung secara live, dan ban alamat yang bermasalah dari konsol.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-6m3 2v-2m5 10V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2z"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">Statistik pendengar</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Poller mencatat jumlah pendengar tiap 10 detik dengan retensi 7 hari. Basis data historis milik Anda sendiri, bukan pihak ketiga.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <div class="w-10 h-10 bg-brand-red/10 rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          </div>
+          <h3 class="font-bold mb-2">RBAC &amp; operator</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Admin mengelola semuanya; operator hanya stasiunnya sendiri. Field sensitif (bitrate, port, kuota) otomatis disembunyikan dari operator.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== DETAIL TEKNIS ==================== -->
+  <section id="teknis" class="py-16 md:py-24 px-6 bg-brand-sand/60">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <p class="text-sm font-mono font-medium text-brand-red tracking-wider uppercase mb-3">Detail Teknis</p>
+        <h2 class="text-3xl md:text-4xl font-display font-bold tracking-tight">Satu proses, mudah di-deploy.</h2>
+        <p class="mt-4 text-lg text-brand-ink2">Dirancang untuk VPS kecil, tanpa orkestrasi yang rumit.</p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <p class="font-mono text-xs font-semibold text-brand-red tracking-wider uppercase mb-4">Arsitektur</p>
+          <ul class="space-y-2.5 text-sm text-brand-ink2">
+            <li class="flex gap-2"><span class="font-mono font-bold text-brand-red">›</span> Node 22 · TypeScript · Fastify 5</li>
+            <li class="flex gap-2"><span class="font-mono font-bold text-brand-red">›</span> Prisma 6 + SQLite — tanpa DB server terpisah</li>
+            <li class="flex gap-2"><span class="font-mono font-bold text-brand-red">›</span> SPA react-admin + API dalam satu proses</li>
+            <li class="flex gap-2"><span class="font-mono font-bold text-brand-red">›</span> Supervisor sc_serv + sc_trans per stasiun</li>
+          </ul>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <p class="font-mono text-xs font-semibold text-brand-red tracking-wider uppercase mb-4">Keamanan</p>
+          <ul class="space-y-2.5 text-sm text-brand-ink2">
+            <li class="flex gap-2"><span class="font-mono font-bold text-brand-red">›</span> Sesi terkelola, hash argon2 untuk kata sandi</li>
+            <li class="flex gap-2"><span class="font-mono font-bold text-brand-red">›</span> Validasi Zod di seluruh API</li>
+            <li class="flex gap-2"><span class="font-mono font-bold text-brand-red">›</span> RBAC: ADMIN vs USER (operator stasiun)</li>
+            <li class="flex gap-2"><span class="font-mono font-bold text-brand-red">›</span> Suspend stasiun: berhenti total, tak bisa dinyalakan</li>
+          </ul>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <p class="font-mono text-xs font-semibold text-brand-red tracking-wider uppercase mb-4">Operasional</p>
+          <ul class="space-y-2.5 text-sm text-brand-ink2">
+            <li class="flex gap-2"><span class="font-mono font-bold text-brand-red">›</span> Alokasi port otomatis (rentang dapat diatur)</li>
+            <li class="flex gap-2"><span class="font-mono font-bold text-brand-red">›</span> Unggah media hingga 200 MB, kuota per stasiun</li>
+            <li class="flex gap-2"><span class="font-mono font-bold text-brand-red">›</span> Backup terjadwal via systemd timer</li>
+            <li class="flex gap-2"><span class="font-mono font-bold text-brand-red">›</span> Rilis di balik nginx + TLS, siap produksi</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CTA LINTAS PRODUK ==================== -->
+  <section class="py-16 md:py-20 px-6">
+    <div class="max-w-4xl mx-auto text-center bg-brand-cream2 rounded-3xl border border-brand-ink/10 px-8 py-12" style="background-image: radial-gradient(60% 80% at 50% 0%, rgba(224,45,36,0.05), transparent);">
+      <h2 class="text-2xl md:text-3xl font-display font-bold tracking-tight mb-3">Panel butuh sumber siaran.</h2>
+      <p class="text-brand-ink2 mb-8 max-w-xl mx-auto">DJ Anda bisa live dari ponsel dengan Streamy Android, atau dari studio kecil dengan Streamy Desktop.</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="/android/" class="px-8 py-4 bg-brand-ink text-brand-cream font-semibold rounded-lg hover:opacity-90 transition-opacity">Lihat Streamy Android</a>
+        <a href="/desktop/" class="px-8 py-4 border-2 border-brand-ink/15 font-semibold rounded-lg hover:border-brand-red hover:text-brand-red transition-colors">Lihat Streamy Desktop</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="py-10 px-6 border-t border-brand-ink/10">
+  <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+    <div class="flex items-center gap-2.5">
+      <span class="w-2.5 h-2.5 rounded-full bg-brand-red"></span>
+      <span class="font-display font-bold">Streamy</span>
+    </div>
+    <div class="flex gap-8">
+      <a href="/android/" class="text-sm text-brand-ink2 hover:text-brand-red transition-colors">Android</a>
+      <a href="/desktop/" class="text-sm text-brand-ink2 hover:text-brand-red transition-colors">Desktop</a>
+      <a href="/panel/" class="text-sm font-semibold text-brand-red" aria-current="page">Panel</a>
+    </div>
+    <p class="text-sm text-brand-ink2/80">© 2026 Streamy · <span class="font-mono text-xs">streamy-app.pages.dev</span></p>
+  </div>
+</footer>
+
+</body>
+</html>

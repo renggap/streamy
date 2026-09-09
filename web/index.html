@@ -2,432 +2,244 @@
 <html lang="id">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Streamy — Siaran langsung dari ponsel Anda</title>
-  <meta name="description" content="Streamy adalah aplikasi Android yang menyiarkan suara Anda langsung ke server radio internet SHOUTcast v2 — dan tetap bersiaran di latar belakang, bahkan saat layar mati." />
-  <meta name="theme-color" content="#141210" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Streamy — Radio internet untuk semua perangkat</title>
+  <meta name="description" content="Streamy adalah tiga produk dalam satu ekosistem radio internet: Streamy Android untuk siaran dari ponsel, Streamy Desktop untuk siaran dari komputer, dan Streamy Panel untuk mengelola stasiun Anda sendiri." />
+  <meta name="theme-color" content="#F7F2E9" />
   <link rel="canonical" href="https://streamy-app.pages.dev/" />
 
-  <!-- Open Graph / social (no fabricated image — honest) -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://streamy-app.pages.dev/" />
-  <meta property="og:title" content="Streamy — Siaran langsung dari ponsel Anda" />
-  <meta property="og:description" content="Suaranya langsung dari ponsel Android Anda, disiarkan ke server radio internet SHOUTcast v2. Tetap bersiaran di latar belakang." />
+  <meta property="og:title" content="Streamy — Radio internet untuk semua perangkat" />
+  <meta property="og:description" content="Bersiaran dari ponsel atau komputer, dan kelola stasiun radio internet Anda sendiri. Tiga produk, satu ekosistem." />
   <meta name="twitter:card" content="summary" />
 
-  <!-- Favicon: red tally dot on dark -->
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23141210'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23FF3B30'/%3E%3C/svg%3E" />
+  <!-- Favicon: red tally dot on warm cream -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23F7F2E9'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23E02D24'/%3E%3C/svg%3E" />
 
-  <!-- Fonts: Space Grotesk (display) · Inter (body) · JetBrains Mono (readout) -->
+  <!-- Tailwind Play CDN (JokoUI komponen = Tailwind murni, tanpa build step) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Brand Streamy di atas JokoUI: on-air red + warm cream, light theme (bukan putih kosong)
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              red: '#E02D24',        /* aksen on-air */
+              reddark: '#B7231B',
+              cream: '#F7F2E9',      /* kertas hangat */
+              cream2: '#FDFBF6',     /* kartu */
+              sand: '#EDE5D6',       /* permukaan sekunder */
+              ink: '#241F1A',        /* teks utama */
+              ink2: '#5C554C'        /* teks sekunder */
+            }
+          },
+          fontFamily: {
+            display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+            body: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-
-  <link rel="stylesheet" href="tokens.css" />
-  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
 </head>
-<body>
+<body class="bg-brand-cream text-brand-ink font-body antialiased" style="background-image: radial-gradient(50% 40% at 15% -5%, rgba(224,45,36,0.06), transparent 70%), radial-gradient(45% 35% at 95% 5%, rgba(224,45,36,0.05), transparent 72%);">
 
-<!-- ============================ NAV · N5 floating pill ============================ -->
-<header class="nav">
-  <nav class="nav-pill" aria-label="Primary">
-    <a class="brand" href="#top" aria-label="Streamy">
-      <span class="dot" aria-hidden="true"></span>
-      <span>Streamy</span>
-    </a>
-    <div class="nav-links">
-      <a class="anchor" href="#features" data-i18n="nav.features">Fitur</a>
-      <a class="anchor" href="#how" data-i18n="nav.how">Cara kerja</a>
-      <a class="anchor" href="#changelog" data-i18n="nav.changelog">Catatan perubahan</a>
-
-      <!-- Language switcher · flag icons (default: Bahasa Indonesia) -->
-      <div class="lang" role="group" data-i18n-aria="lang.label" aria-label="Pilih bahasa">
-        <button type="button" data-lang="id" aria-pressed="true" aria-label="Bahasa Indonesia">
-          <svg viewBox="0 0 30 20" role="img" aria-hidden="true" focusable="false">
-            <rect width="30" height="10" fill="#FF0000"/><rect y="10" width="30" height="10" fill="#FFFFFF"/>
-          </svg>
-        </button>
-        <button type="button" data-lang="en" aria-pressed="false" aria-label="English">
-          <svg viewBox="0 0 30 20" role="img" aria-hidden="true" focusable="false">
-            <rect width="30" height="20" fill="#012169"/>
-            <path d="M0,0 L30,20 M30,0 L0,20" stroke="#FFFFFF" stroke-width="4" fill="none"/>
-            <path d="M0,0 L30,20 M30,0 L0,20" stroke="#C8102E" stroke-width="1.6" fill="none"/>
-            <path d="M15,0 V20 M0,10 H30" stroke="#FFFFFF" stroke-width="6"/>
-            <path d="M15,0 V20 M0,10 H30" stroke="#C8102E" stroke-width="3"/>
-          </svg>
-        </button>
+<!-- ==================== NAVBAR (JokoUI Simple Header, dimodifikasi) ==================== -->
+<header class="sticky top-0 z-50 bg-brand-cream/80 backdrop-blur border-b border-brand-ink/10">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6">
+    <nav class="flex items-center justify-between h-16">
+      <a href="/" class="flex items-center gap-2.5 shrink-0">
+        <span class="relative flex h-3 w-3">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-red opacity-40"></span>
+          <span class="relative inline-flex rounded-full h-3 w-3 bg-brand-red"></span>
+        </span>
+        <span class="font-display font-bold text-xl tracking-tight">Streamy</span>
+      </a>
+      <div class="hidden md:flex items-center gap-8">
+        <a href="/android/" class="text-sm font-medium text-brand-ink2 hover:text-brand-red transition-colors">Android</a>
+        <a href="/desktop/" class="text-sm font-medium text-brand-ink2 hover:text-brand-red transition-colors">Desktop</a>
+        <a href="/panel/" class="text-sm font-medium text-brand-ink2 hover:text-brand-red transition-colors">Panel</a>
       </div>
-    </div>
-  </nav>
+      <a href="#produk" class="inline-flex items-center px-4 py-2 bg-brand-red text-white text-sm font-semibold rounded-lg hover:bg-brand-reddark transition-colors shadow-sm">
+        Jelajahi Produk
+      </a>
+    </nav>
+  </div>
 </header>
 
-<main id="top">
-
-  <!-- ============================ HERO ============================ -->
-  <section class="hero container reveal" aria-labelledby="hero-title">
-    <p class="eyebrow"><span class="pip" aria-hidden="true">●</span> Streamy · v1.0.0 · Android</p>
-
-    <span class="tally" role="img" data-i18n-aria="tally.aria" aria-label="Indikator On Air">
-      <span class="led" aria-hidden="true"></span>
-      <span class="label">On Air</span>
-    </span>
-
-    <h1 id="hero-title" data-i18n="hero.h1">Siaran langsung dari ponsel Anda.</h1>
-
-    <p class="lede" data-i18n-html="hero.lede">Streamy adalah aplikasi Android yang mengirim <strong>suara Anda secara langsung</strong> ke server radio internet SHOUTcast — dan tetap bersiaran meski layar mati.</p>
-
-    <!-- Hand-built oscilloscope: frozen broadcast trace with phosphor glow. Pure SVG. -->
-    <figure class="scope" data-i18n-aria="scope.aria" aria-label="Osiloskop gelombang suara langsung">
-      <svg viewBox="0 0 1000 110" role="img" aria-hidden="true">
-        <g class="grid">
-          <line x1="0" y1="20" x2="1000" y2="20" />
-          <line x1="0" y1="90" x2="1000" y2="90" />
-          <line x1="250" y1="6" x2="250" y2="104" />
-          <line x1="500" y1="6" x2="500" y2="104" />
-          <line x1="750" y1="6" x2="750" y2="104" />
-        </g>
-        <line class="axis" x1="0" y1="55" x2="1000" y2="55" />
-        <polyline class="trace"
-          points="0,55 30,53 60,57 90,49 120,61 150,45 180,65 210,40 240,70 270,33 300,77 330,33 360,77 390,43 420,67 450,47 480,63 510,38 540,72 570,28 600,82 630,30 660,80 690,36 720,74 750,44 780,66 810,50 840,60 870,52 900,58 930,54 960,56 1000,55" />
-      </svg>
-    </figure>
-
-    <a class="cue" href="#how"><span class="arr" aria-hidden="true">↓</span> <span data-i18n="hero.cue">Cara kerja</span></a>
-  </section>
-
-  <!-- ============================ WHAT IT IS ============================ -->
-  <section class="section container reveal" aria-labelledby="what-title">
-    <div class="section-head">
-      <p class="mono" data-i18n="what.mono">Tentang</p>
-      <h2 id="what-title" data-i18n="what.h2">Studio siaran dalam genggaman.</h2>
-    </div>
-    <div class="statement-wrap">
-      <p class="statement" data-i18n-html="what.statement">Ponsel Anda kini menjadi <em>sumber siaran langsung</em>.</p>
-      <p class="body" data-i18n="what.body">Cukup bicara ke mikrofon, Streamy menyandikan suara Anda dan mengirimnya melalui internet ke server SHOUTcast v2 — server semacam inilah yang menggerakkan ribuan stasiun radio internet. Siapa pun yang tersambung ke server itu mendengar Anda secara langsung. Tanpa laptop, tanpa meja mixer, tanpa studio.</p>
-    </div>
-  </section>
-
-  <!-- ============================ FEATURES ============================ -->
-  <section class="section container reveal" id="features" aria-labelledby="features-title">
-    <div class="section-head">
-      <p class="mono" data-i18n="features.mono">Fitur</p>
-      <h2 id="features-title" data-i18n="features.h2">Dibuat untuk tetap siaran.</h2>
-      <p class="desc" data-i18n="features.desc">Semua di bawah ini hadir di v1.0.0 — ditulis untuk manusia, bukan protokol.</p>
-    </div>
-
-    <div class="features">
-      <article class="feature">
-        <p class="ch"><i></i> Ch 01</p>
-        <h3 data-i18n="f1.title">Siaran ke server radio sungguhan</h3>
-        <p data-i18n="f1.body">Menggunakan protokol sumber SHOUTcast v2 yang asli — standar di balik ribuan stasiun radio internet. Teruji langsung terhadap DNAS 2.6.1.</p>
-      </article>
-      <article class="feature">
-        <p class="ch"><i></i> Ch 02</p>
-        <h3 data-i18n="f2.title">Kualitas audio pilihan Anda</h3>
-        <p data-i18n="f2.body">Dari 16 kbps yang ramah suara hingga 192 kbps kelas musik. Pilih bitrate, laju sampel, serta mono atau stereo.</p>
-      </article>
-      <article class="feature">
-        <p class="ch"><i></i> Ch 03</p>
-        <h3 data-i18n="f3.title">Tetap bersiaran di latar belakang</h3>
-        <p data-i18n="f3.body">Layanan latar depan menjaga mikrofon dan koneksi tetap hidup saat layar mati — dan menyambung ulang setelah sistem menutup aplikasi.</p>
-      </article>
-      <article class="feature">
-        <p class="ch"><i></i> Ch 04</p>
-        <h3 data-i18n="f4.title">Putus? Menyambung ulang otomatis</h3>
-        <p data-i18n="f4.body">Mencoba ulang otomatis dengan jeda yang makin lama antarpercobaan — ditambah tombol hentikan sekali sentuh saat Anda ingin berhenti.</p>
-      </article>
-      <article class="feature">
-        <p class="ch"><i></i> Ch 05</p>
-        <h3 data-i18n="f5.title">Judul now-playing, tanpa login admin</h3>
-        <p data-i18n="f5.body">Ketik judul lagu atau acara saat siaran, dan pendengar melihatnya seketika. Tanpa perlu kata sandi admin server.</p>
-      </article>
-      <article class="feature">
-        <p class="ch"><i></i> Ch 06</p>
-        <h3 data-i18n="f6.title">Lihat suara Anda sebagai gelombang</h3>
-        <p data-i18n="f6.body">Osiloskop real-time yang digambar langsung dari sinyal mikrofon Anda, menyala seperti lampu tally siaran.</p>
-      </article>
-      <article class="feature">
-        <p class="ch"><i></i> Ch 07</p>
-        <h3 data-i18n="f7.title">Simpan beberapa stasiun</h3>
-        <p data-i18n="f7.body">Simpan profil untuk tiap server — host, port, kata sandi, dan pengaturan audio — lalu beralih di antaranya.</p>
-      </article>
-      <article class="feature">
-        <p class="ch"><i></i> Ch 08</p>
-        <h3 data-i18n="f8.title">Konsol yang terasa seperti konsol</h3>
-        <p data-i18n="f8.body">Desain lampu tally malam hari: tinta pekat, merah on-air, dan readout monospace. Dibuat dengan Hallmark.</p>
-      </article>
-    </div>
-  </section>
-
-  <!-- ============================ HOW IT WORKS ============================ -->
-  <section class="section container reveal" id="how" aria-labelledby="how-title">
-    <div class="section-head">
-      <p class="mono" data-i18n="how.mono">Cara kerja</p>
-      <h2 id="how-title" data-i18n="how.h2">Dari suara Anda ke telinga mereka.</h2>
-      <p class="desc" data-i18n="how.desc">Empat langkah, berjalan terus saat Anda siaran.</p>
-    </div>
-
-    <ol class="pipeline">
-      <li class="step">
-        <span class="num">01</span>
-        <h3 data-i18n="step1.title">Anda bicara</h3>
-        <p data-i18n="step1.body">Mikrofon ponsel Anda menangkap suara Anda.</p>
-      </li>
-      <li class="step">
-        <span class="num">02</span>
-        <h3 data-i18n="step2.title">Streamy menyandikan</h3>
-        <p data-i18n="step2.body">Ia memampatkan suara Anda menjadi audio MP3 secara real-time.</p>
-      </li>
-      <li class="step">
-        <span class="num">03</span>
-        <h3 data-i18n="step3.title">Dikirim ke server Anda</h3>
-        <p data-i18n="step3.body">Audio tersebut mengalir melalui internet menuju server SHOUTcast v2 Anda.</p>
-      </li>
-      <li class="step">
-        <span class="num">04</span>
-        <h3 data-i18n="step4.title">Pendengar mendengarkan</h3>
-        <p data-i18n="step4.body">Siapa pun yang tersambung ke server itu mendengar Anda, secara langsung.</p>
-      </li>
-    </ol>
-  </section>
-
-  <!-- ============================ CHANGELOG ============================ -->
-  <section class="section container reveal" id="changelog" aria-labelledby="log-title">
-    <div class="section-head">
-      <p class="mono" data-i18n="log.mono">Catatan perubahan</p>
-      <h2 id="log-title" data-i18n="log.h2">Log transmisi.</h2>
-      <p class="desc" data-i18n="log.desc">Apa yang dirilis, dan apa yang diperbaiki sejak itu.</p>
-    </div>
-
-    <div class="log">
-      <div class="log-bar">
-        <span class="title"><i></i> <span data-i18n="log.bar.title">Catatan rilis</span></span>
-        <span class="meta">streamy-app.pages.dev</span>
-      </div>
-      <div class="log-body">
-
-        <div class="log-release">
-          <span class="ver"><b>v1.0.0</b> <span data-i18n="log.v1.when">Rilis awal · 2026-07</span></span>
-          <ul>
-            <li data-i18n-html="log.v1.b1"><b>Suara langsung → SHOUTcast v2</b> melalui protokol sumber Ultravox 2.1 yang asli.</li>
-            <li data-i18n-html="log.v1.b2"><b>MP3</b> pada 16, 24, 48, 64, 96, 128, dan 192 kbps.</li>
-            <li data-i18n-html="log.v1.b3"><b>Siaran latar belakang</b> yang bertahan saat layar mati maupun saat aplikasi dikecilkan.</li>
-            <li data-i18n-html="log.v1.b4"><b>Penyambungan ulang otomatis</b> dengan kendali hentikan secara manual.</li>
-            <li data-i18n-html="log.v1.b5"><b>Judul now-playing</b> tanpa login admin server.</li>
-            <li data-i18n-html="log.v1.b6"><b>Meter VU osiloskop sungguhan</b> di layar siaran.</li>
-            <li data-i18n-html="log.v1.b7"><b>Profil beberapa stasiun</b> dengan pengaturan audio per profil.</li>
-            <li data-i18n-html="log.v1.b8"><b>Dropdown bitrate, laju sampel, dan kanal</b>.</li>
-          </ul>
-          <p class="note" data-i18n="log.v1.note">Catatan: enkoding AAC sudah diimplementasikan tetapi disembunyikan di rilis ini — sedang ditinjau ulang.</p>
-        </div>
-
-        <div class="log-release">
-          <span class="ver"><b data-i18n="log.patch.label">Perbaikan</b> <span data-i18n="log.patch.when">Setelah v1.0.0</span></span>
-          <ul>
-            <li data-i18n="log.patch.b1">Audio bitrate rendah (16 / 24 kbps) kini melaporkan kualitasnya dengan benar.</li>
-            <li data-i18n="log.patch.b2">Terhubung ke server berbasis Centova / sctrans2 (memakai kunci cipher milik tiap server).</li>
-            <li data-i18n="log.patch.b3">Stabilitas AAC ditingkatkan lewat framing ADTS (sementara masih disembunyikan di UI).</li>
-          </ul>
-        </div>
-
+<main>
+  <!-- ==================== HERO (JokoUI Simple Hero) ==================== -->
+  <section class="py-20 md:py-28 px-6">
+    <div class="max-w-4xl mx-auto text-center">
+      <span class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-brand-red/30 bg-brand-red/5 text-brand-red text-xs font-mono font-medium tracking-wide uppercase mb-8">
+        <span class="w-2 h-2 rounded-full bg-brand-red animate-pulse"></span> On Air
+      </span>
+      <h1 class="text-4xl md:text-6xl font-display font-bold tracking-tight mb-6">
+        Stasiun radio internet Anda,
+        <span class="text-brand-red">lengkap</span>.
+      </h1>
+      <p class="text-lg md:text-xl text-brand-ink2 mb-10 max-w-2xl mx-auto leading-relaxed">
+        Bersiaran dari ponsel Android, dari komputer, dan kelola semua stasiun Anda dari satu panel. Tiga produk, satu ekosistem siaran.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="#produk" class="px-8 py-4 bg-brand-red text-white font-semibold rounded-lg hover:bg-brand-reddark transition-colors shadow-lg shadow-brand-red/20">
+          Lihat Tiga Produknya
+        </a>
+        <a href="#ekosistem" class="px-8 py-4 border-2 border-brand-ink/15 text-brand-ink font-semibold rounded-lg hover:border-brand-red hover:text-brand-red transition-colors">
+          Cara Ekosistemnya Bekerja
+        </a>
       </div>
     </div>
   </section>
 
+  <!-- ==================== PRODUK · 3 kartu (JokoUI feature grid) ==================== -->
+  <section id="produk" class="py-16 md:py-24 px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <p class="text-sm font-mono font-medium text-brand-red tracking-wider uppercase mb-3">Produk</p>
+        <h2 class="text-3xl md:text-4xl font-display font-bold tracking-tight">Tiga alat, satu alur siaran.</h2>
+        <p class="mt-4 text-lg text-brand-ink2">Mulai dari mana saja. Semuanya berbicara bahasa yang sama: SHOUTcast v2.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <!-- Streamy Android -->
+        <a href="/android/" class="group flex flex-col bg-brand-cream2 rounded-2xl border border-brand-ink/10 p-7 transition-all duration-200 hover:-translate-y-1 hover:border-brand-red/40 hover:shadow-xl hover:shadow-brand-red/10">
+          <div class="w-12 h-12 bg-brand-red/10 rounded-xl flex items-center justify-center mb-5">
+            <svg class="w-6 h-6 text-brand-red" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.6 9.48l1.84-3.18c.16-.31.04-.7-.26-.85-.29-.15-.65-.06-.83.22l-1.88 3.24a11.46 11.46 0 00-4.94 0L9.65 5.67c-.19-.29-.58-.38-.87-.2-.28.18-.37.54-.22.83L10.4 9.48C7.87 10.78 6.12 13.2 6 16h12c-.12-2.8-1.87-5.22-4.4-6.52zM9 13.5a1 1 0 110-2 1 1 0 010 2zm6 0a1 1 0 110-2 1 1 0 010 2z"/><path d="M4.5 17.5h15v3a1 1 0 01-1 1h-13a1 1 0 01-1-1v-3zM4 10.5h16a.5.5 0 01.5.5v6a.5.5 0 01-1 0v-5.5h-15V17a.5.5 0 01-1 0v-6a.5.5 0 01.5-.5z" opacity=".55"/><path d="M6 17.5h12v3.5H6z" opacity=".35"/></svg>
+          </div>
+          <p class="font-mono text-xs text-brand-ink2/70 tracking-wider uppercase mb-1">Sumber siaran · Ponsel</p>
+          <h3 class="text-xl font-display font-bold mb-2">Streamy <span class="text-brand-red">Android</span></h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed mb-6">Suara Anda langsung ke server SHOUTcast v2 dari kantong Anda. Tetap siaran di latar belakang, bahkan saat layar mati.</p>
+          <span class="mt-auto inline-flex items-center gap-1.5 text-sm font-semibold text-brand-red">
+            Pelajari
+            <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+          </span>
+        </a>
+
+        <!-- Streamy Desktop -->
+        <a href="/desktop/" class="group flex flex-col bg-brand-cream2 rounded-2xl border border-brand-ink/10 p-7 transition-all duration-200 hover:-translate-y-1 hover:border-brand-red/40 hover:shadow-xl hover:shadow-brand-red/10">
+          <div class="w-12 h-12 bg-brand-red/10 rounded-xl flex items-center justify-center mb-5">
+            <svg class="w-6 h-6 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17.25v1.5a1.5 1.5 0 01-1.5 1.5h6a1.5 1.5 0 01-1.5-1.5v-1.5m-10.5-3h16.5a1.5 1.5 0 001.5-1.5v-7.5a1.5 1.5 0 00-1.5-1.5h-16.5a1.5 1.5 0 00-1.5 1.5v7.5a1.5 1.5 0 001.5 1.5z"/></svg>
+          </div>
+          <p class="font-mono text-xs text-brand-ink2/70 tracking-wider uppercase mb-1">Studio siaran · Komputer</p>
+          <h3 class="text-xl font-display font-bold mb-2">Streamy <span class="text-brand-red">Desktop</span></h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed mb-6">Decker ganda bergaya Winamp: playlist, EQ, crossfader, mikrofon dengan auto-duck. Siaran MP3/AAC ke SHOUTcast v2 dan Icecast.</p>
+          <span class="mt-auto inline-flex items-center gap-1.5 text-sm font-semibold text-brand-red">
+            Pelajari
+            <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+          </span>
+        </a>
+
+        <!-- Streamy Panel -->
+        <a href="/panel/" class="group flex flex-col bg-brand-cream2 rounded-2xl border border-brand-ink/10 p-7 transition-all duration-200 hover:-translate-y-1 hover:border-brand-red/40 hover:shadow-xl hover:shadow-brand-red/10">
+          <div class="w-12 h-12 bg-brand-red/10 rounded-xl flex items-center justify-center mb-5">
+            <svg class="w-6 h-6 text-brand-red" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12h4l3-9 4 18 3-9h4"/></svg>
+          </div>
+          <p class="font-mono text-xs text-brand-ink2/70 tracking-wider uppercase mb-1">Sisi server · Stasiun</p>
+          <h3 class="text-xl font-display font-bold mb-2">Streamy <span class="text-brand-red">Panel</span></h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed mb-6">Panel kendali stasiun radio yang Anda host sendiri: AutoDJ, media library, jadwal, DJ, dan statistik pendengar. Tanpa vendor.</p>
+          <span class="mt-auto inline-flex items-center gap-1.5 text-sm font-semibold text-brand-red">
+            Pelajari
+            <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+          </span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== EKOSISTEM (alur siaran) ==================== -->
+  <section id="ekosistem" class="py-16 md:py-24 px-6 bg-brand-sand/60">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center max-w-2xl mx-auto mb-14">
+        <p class="text-sm font-mono font-medium text-brand-red tracking-wider uppercase mb-3">Ekosistem</p>
+        <h2 class="text-3xl md:text-4xl font-display font-bold tracking-tight">Dari suara Anda ke pendengar mereka.</h2>
+        <p class="mt-4 text-lg text-brand-ink2">Setiap produk mengisi satu peran. Gabungkan sesuai kebutuhan stasiun Anda.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <p class="font-mono text-xs font-semibold text-brand-red mb-3">01 · Sumber</p>
+          <h3 class="font-display font-bold mb-2">Anda siaran</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Bicara lewat <strong class="text-brand-ink">Streamy Android</strong>, atau mix musik dan mikrofon lewat <strong class="text-brand-ink">Streamy Desktop</strong>.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <p class="font-mono text-xs font-semibold text-brand-red mb-3">02 · Enkode &amp; kirim</p>
+          <h3 class="font-display font-bold mb-2">Audio mengalir</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Suara dipadatkan menjadi MP3 atau AAC, lalu dikirim ke server lewat protokol sumber SHOUTcast v2 yang asli.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <p class="font-mono text-xs font-semibold text-brand-red mb-3">03 · Server</p>
+          <h3 class="font-display font-bold mb-2">Panel yang mengelola</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed"><strong class="text-brand-ink">Streamy Panel</strong> menjalankan stasiun: AutoDJ mengisi siaran saat Anda tidak live, jadwal dan DJ diatur dari satu tempat.</p>
+        </div>
+        <div class="bg-brand-cream2 rounded-xl border border-brand-ink/10 p-6">
+          <p class="font-mono text-xs font-semibold text-brand-red mb-3">04 · Pendengar</p>
+          <h3 class="font-display font-bold mb-2">Dunia mendengarkan</h3>
+          <p class="text-sm text-brand-ink2 leading-relaxed">Siapa pun yang tersambung ke stasiun Anda mendengar siaran, langsung dan tanpa jeda.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== NILAI BERSAMA (JokoUI stats-bordered) ==================== -->
+  <section class="py-16 md:py-20 px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center max-w-2xl mx-auto mb-12">
+        <h2 class="text-3xl font-display font-bold tracking-tight mb-4">Satu fondasi di balik ketiganya.</h2>
+        <p class="text-lg text-brand-ink2">Prinsip yang sama menggerakkan Android, Desktop, dan Panel.</p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 text-center">
+        <div class="sm:border-r border-brand-ink/10">
+          <div class="text-4xl font-display font-bold text-brand-red mb-2">SHOUTcast&nbsp;v2</div>
+          <div class="text-sm font-medium text-brand-ink2 uppercase tracking-wider">Protokol asli, teruji</div>
+        </div>
+        <div class="sm:border-r border-brand-ink/10">
+          <div class="text-4xl font-display font-bold text-brand-red mb-2">Auto-reconnect</div>
+          <div class="text-sm font-medium text-brand-ink2 uppercase tracking-wider">Siaran bertahan putus</div>
+        </div>
+        <div>
+          <div class="text-4xl font-display font-bold text-brand-red mb-2">Milik Anda</div>
+          <div class="text-sm font-medium text-brand-ink2 uppercase tracking-wider">Server Anda, data Anda</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CTA PENUTUP (JokoUI Minimal CTA) ==================== -->
+  <section class="py-16 md:py-24 px-6">
+    <div class="max-w-4xl mx-auto text-center bg-brand-cream2 rounded-3xl border border-brand-ink/10 px-8 py-14" style="background-image: radial-gradient(60% 80% at 50% 0%, rgba(224,45,36,0.05), transparent);">
+      <h2 class="text-3xl md:text-4xl font-display font-bold tracking-tight mb-4">Siap naik udara?</h2>
+      <p class="text-lg text-brand-ink2 mb-8 max-w-xl mx-auto">Pilih perangkat Anda dan mulai bersiaran. Semuanya dirancang untuk bekerja bersama, tapi berguna sendiri-sendiri.</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="/android/" class="px-8 py-4 bg-brand-red text-white font-semibold rounded-lg hover:bg-brand-reddark transition-colors shadow-lg shadow-brand-red/20">Siaran dari Ponsel</a>
+        <a href="/desktop/" class="px-8 py-4 bg-brand-ink text-brand-cream font-semibold rounded-lg hover:opacity-90 transition-opacity">Siaran dari Komputer</a>
+        <a href="/panel/" class="px-8 py-4 border-2 border-brand-ink/15 font-semibold rounded-lg hover:border-brand-red hover:text-brand-red transition-colors">Kelola Stasiun</a>
+      </div>
+    </div>
+  </section>
 </main>
 
-<!-- ============================ FOOTER · Ft5 statement ============================ -->
-<footer class="footer">
-  <div class="container">
-    <p class="closing reveal" data-i18n-html="footer.closing">On air kapan pun <em>Anda</em> siap.</p>
-    <div class="footer-meta">
-      <span class="brand-mark"><i></i> Streamy · Android</span>
-      <span class="signoff"><i></i> <span data-i18n="footer.signoff">v1.0.0 · Dibuat dengan Hallmark · Akhir transmisi</span></span>
+<!-- ==================== FOOTER (JokoUI Social Footer) ==================== -->
+<footer class="py-10 px-6 border-t border-brand-ink/10">
+  <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+    <div class="flex items-center gap-2.5">
+      <span class="w-2.5 h-2.5 rounded-full bg-brand-red"></span>
+      <span class="font-display font-bold">Streamy</span>
     </div>
+    <div class="flex gap-8">
+      <a href="/android/" class="text-sm text-brand-ink2 hover:text-brand-red transition-colors">Android</a>
+      <a href="/desktop/" class="text-sm text-brand-ink2 hover:text-brand-red transition-colors">Desktop</a>
+      <a href="/panel/" class="text-sm text-brand-ink2 hover:text-brand-red transition-colors">Panel</a>
+    </div>
+    <p class="text-sm text-brand-ink2/80">© 2026 Streamy · <span class="font-mono text-xs">streamy-app.pages.dev</span></p>
   </div>
 </footer>
-
-<!-- Bilingual content (id default / en). Inline text is Bahasa so the page reads correctly before JS runs. -->
-<script>
-  (function () {
-    var I18N = {
-      id: {
-        "doc.title": "Streamy — Siaran langsung dari ponsel Anda",
-        "meta.description": "Streamy adalah aplikasi Android yang menyiarkan suara Anda langsung ke server radio internet SHOUTcast v2 — dan tetap bersiaran di latar belakang, bahkan saat layar mati.",
-        "og.title": "Streamy — Siaran langsung dari ponsel Anda",
-        "og.description": "Suaranya langsung dari ponsel Android Anda, disiarkan ke server radio internet SHOUTcast v2. Tetap bersiaran di latar belakang.",
-        "lang.label": "Pilih bahasa",
-        "tally.aria": "Indikator On Air",
-        "scope.aria": "Osiloskop gelombang suara langsung",
-        "nav.features": "Fitur",
-        "nav.how": "Cara kerja",
-        "nav.changelog": "Catatan perubahan",
-        "hero.h1": "Siaran langsung dari ponsel Anda.",
-        "hero.lede": "Streamy adalah aplikasi Android yang mengirim <strong>suara Anda secara langsung</strong> ke server radio internet SHOUTcast — dan tetap bersiaran meski layar mati.",
-        "hero.cue": "Cara kerja",
-        "what.mono": "Tentang",
-        "what.h2": "Studio siaran dalam genggaman.",
-        "what.statement": "Ponsel Anda kini menjadi <em>sumber siaran langsung</em>.",
-        "what.body": "Cukup bicara ke mikrofon, Streamy menyandikan suara Anda dan mengirimnya melalui internet ke server SHOUTcast v2 — server semacam inilah yang menggerakkan ribuan stasiun radio internet. Siapa pun yang tersambung ke server itu mendengar Anda secara langsung. Tanpa laptop, tanpa meja mixer, tanpa studio.",
-        "features.mono": "Fitur",
-        "features.h2": "Dibuat untuk tetap siaran.",
-        "features.desc": "Semua di bawah ini hadir di v1.0.0 — ditulis untuk manusia, bukan protokol.",
-        "f1.title": "Siaran ke server radio sungguhan",
-        "f1.body": "Menggunakan protokol sumber SHOUTcast v2 yang asli — standar di balik ribuan stasiun radio internet. Teruji langsung terhadap DNAS 2.6.1.",
-        "f2.title": "Kualitas audio pilihan Anda",
-        "f2.body": "Dari 16 kbps yang ramah suara hingga 192 kbps kelas musik. Pilih bitrate, laju sampel, serta mono atau stereo.",
-        "f3.title": "Tetap bersiaran di latar belakang",
-        "f3.body": "Layanan latar depan menjaga mikrofon dan koneksi tetap hidup saat layar mati — dan menyambung ulang setelah sistem menutup aplikasi.",
-        "f4.title": "Putus? Menyambung ulang otomatis",
-        "f4.body": "Mencoba ulang otomatis dengan jeda yang makin lama antarpercobaan — ditambah tombol hentikan sekali sentuh saat Anda ingin berhenti.",
-        "f5.title": "Judul now-playing, tanpa login admin",
-        "f5.body": "Ketik judul lagu atau acara saat siaran, dan pendengar melihatnya seketika. Tanpa perlu kata sandi admin server.",
-        "f6.title": "Lihat suara Anda sebagai gelombang",
-        "f6.body": "Osiloskop real-time yang digambar langsung dari sinyal mikrofon Anda, menyala seperti lampu tally siaran.",
-        "f7.title": "Simpan beberapa stasiun",
-        "f7.body": "Simpan profil untuk tiap server — host, port, kata sandi, dan pengaturan audio — lalu beralih di antaranya.",
-        "f8.title": "Konsol yang terasa seperti konsol",
-        "f8.body": "Desain lampu tally malam hari: tinta pekat, merah on-air, dan readout monospace. Dibuat dengan Hallmark.",
-        "how.mono": "Cara kerja",
-        "how.h2": "Dari suara Anda ke telinga mereka.",
-        "how.desc": "Empat langkah, berjalan terus saat Anda siaran.",
-        "step1.title": "Anda bicara",
-        "step1.body": "Mikrofon ponsel Anda menangkap suara Anda.",
-        "step2.title": "Streamy menyandikan",
-        "step2.body": "Ia memampatkan suara Anda menjadi audio MP3 secara real-time.",
-        "step3.title": "Dikirim ke server Anda",
-        "step3.body": "Audio tersebut mengalir melalui internet menuju server SHOUTcast v2 Anda.",
-        "step4.title": "Pendengar mendengarkan",
-        "step4.body": "Siapa pun yang tersambung ke server itu mendengar Anda, secara langsung.",
-        "log.mono": "Catatan perubahan",
-        "log.h2": "Log transmisi.",
-        "log.desc": "Apa yang dirilis, dan apa yang diperbaiki sejak itu.",
-        "log.bar.title": "Catatan rilis",
-        "log.v1.when": "Rilis awal · 2026-07",
-        "log.v1.note": "Catatan: enkoding AAC sudah diimplementasikan tetapi disembunyikan di rilis ini — sedang ditinjau ulang.",
-        "log.v1.b1": "<b>Suara langsung → SHOUTcast v2</b> melalui protokol sumber Ultravox 2.1 yang asli.",
-        "log.v1.b2": "<b>MP3</b> pada 16, 24, 48, 64, 96, 128, dan 192 kbps.",
-        "log.v1.b3": "<b>Siaran latar belakang</b> yang bertahan saat layar mati maupun saat aplikasi dikecilkan.",
-        "log.v1.b4": "<b>Penyambungan ulang otomatis</b> dengan kendali hentikan secara manual.",
-        "log.v1.b5": "<b>Judul now-playing</b> tanpa login admin server.",
-        "log.v1.b6": "<b>Meter VU osiloskop sungguhan</b> di layar siaran.",
-        "log.v1.b7": "<b>Profil beberapa stasiun</b> dengan pengaturan audio per profil.",
-        "log.v1.b8": "<b>Dropdown bitrate, laju sampel, dan kanal</b>.",
-        "log.patch.label": "Perbaikan",
-        "log.patch.when": "Setelah v1.0.0",
-        "log.patch.b1": "Audio bitrate rendah (16 / 24 kbps) kini melaporkan kualitasnya dengan benar.",
-        "log.patch.b2": "Terhubung ke server berbasis Centova / sctrans2 (memakai kunci cipher milik tiap server).",
-        "log.patch.b3": "Stabilitas AAC ditingkatkan lewat framing ADTS (sementara masih disembunyikan di UI).",
-        "footer.closing": "On air kapan pun <em>Anda</em> siap.",
-        "footer.signoff": "v1.0.0 · Dibuat dengan Hallmark · Akhir transmisi"
-      },
-      en: {
-        "doc.title": "Streamy — Go live from your phone",
-        "meta.description": "Streamy is an Android app that broadcasts your live voice to a SHOUTcast v2 internet-radio server — and keeps streaming in the background, even with the screen off.",
-        "og.title": "Streamy — Go live from your phone",
-        "og.description": "Live speech from your Android phone, broadcast to a SHOUTcast v2 internet-radio server. Keeps streaming in the background.",
-        "lang.label": "Choose language",
-        "tally.aria": "On air indicator",
-        "scope.aria": "Oscilloscope waveform of a live voice",
-        "nav.features": "Features",
-        "nav.how": "How it works",
-        "nav.changelog": "Changelog",
-        "hero.h1": "Go live from your phone.",
-        "hero.lede": "Streamy is an Android app that sends your <strong>live voice</strong> to a SHOUTcast internet-radio server — and keeps broadcasting, even with the screen off.",
-        "hero.cue": "How it works",
-        "what.mono": "What it is",
-        "what.h2": "A pocket-sized broadcast studio.",
-        "what.statement": "Your phone becomes a <em>live broadcast source</em>.",
-        "what.body": "Speak into the mic, and Streamy encodes your voice and sends it over the internet to a SHOUTcast v2 server — the same kind of server that powers thousands of internet-radio stations. Anyone tuned in to that server hears you in real time. No laptop, no mixing desk, no studio required.",
-        "features.mono": "Features",
-        "features.h2": "Built to stay on air.",
-        "features.desc": "Everything below ships in v1.0.0 — written for humans, not protocols.",
-        "f1.title": "Broadcasts to real radio servers",
-        "f1.body": "Uses the genuine SHOUTcast v2 source protocol — the standard behind thousands of internet-radio stations. Live-tested against DNAS 2.6.1.",
-        "f2.title": "Your choice of audio quality",
-        "f2.body": "From voice-friendly 16 kbps up to music-grade 192 kbps. Pick the bitrate, sample rate, and mono or stereo.",
-        "f3.title": "Stays live in the background",
-        "f3.body": "A foreground service keeps the mic and connection alive with the screen off — and reconnects after the system reclaims the app.",
-        "f4.title": "Drops? It reconnects itself",
-        "f4.body": "Automatic retry with growing pauses between attempts — plus a one-tap stop when you'd rather give up.",
-        "f5.title": "Now-playing titles, no admin login",
-        "f5.body": "Type a song or show name while live and listeners see it instantly. No server admin password needed.",
-        "f6.title": "See your voice as a waveform",
-        "f6.body": "A real-time oscilloscope drawn straight from your mic signal, glowing like a broadcast tally light.",
-        "f7.title": "Save multiple stations",
-        "f7.body": "Keep a profile per server — host, port, password, and audio settings — and switch between them.",
-        "f8.title": "A console that feels like a console",
-        "f8.body": "Late-night tally-light design: deep ink, on-air red, and a monospace readout. Built with Hallmark.",
-        "how.mono": "How it works",
-        "how.h2": "From your voice to their ears.",
-        "how.desc": "Four steps, happening continuously while you're live.",
-        "step1.title": "You speak",
-        "step1.body": "Your phone's microphone picks up your voice.",
-        "step2.title": "Streamy encodes",
-        "step2.body": "It compresses your voice into MP3 audio in real time.",
-        "step3.title": "Sent to your server",
-        "step3.body": "The audio travels over the internet to your SHOUTcast v2 server.",
-        "step4.title": "Listeners tune in",
-        "step4.body": "Anyone connected to that server hears you, live.",
-        "log.mono": "Changelog",
-        "log.h2": "Transmission log.",
-        "log.desc": "What shipped, and what's been patched since.",
-        "log.bar.title": "Release notes",
-        "log.v1.when": "Initial release · 2026-07",
-        "log.v1.note": "Note: AAC encoding is implemented but hidden in this release — being revisited.",
-        "log.v1.b1": "<b>Live speech &rarr; SHOUTcast v2</b> over the real Ultravox 2.1 source protocol.",
-        "log.v1.b2": "<b>MP3</b> at 16, 24, 48, 64, 96, 128, and 192 kbps.",
-        "log.v1.b3": "<b>Background streaming</b> that survives screen-off and backgrounding.",
-        "log.v1.b4": "<b>Auto-reconnect</b> with a manual stop-reconnect control.",
-        "log.v1.b5": "<b>Now-playing titles</b> without a server admin login.",
-        "log.v1.b6": "<b>Real oscilloscope VU meter</b> on the broadcast screen.",
-        "log.v1.b7": "<b>Multiple station profiles</b> with per-profile audio settings.",
-        "log.v1.b8": "<b>Bitrate, sample-rate, and channel</b> dropdowns.",
-        "log.patch.label": "Patches",
-        "log.patch.when": "After v1.0.0",
-        "log.patch.b1": "Low-bitrate audio (16 / 24 kbps) now reports its quality correctly.",
-        "log.patch.b2": "Connects to Centova / sctrans2-based servers (uses each server's own cipher key).",
-        "log.patch.b3": "AAC stability improved via ADTS framing (still hidden in the UI for now).",
-        "footer.closing": "On air whenever <em>you</em> are.",
-        "footer.signoff": "v1.0.0 · Built with Hallmark · End of transmission"
-      }
-    };
-
-    function applyLang(lang) {
-      var dict = I18N[lang] || I18N.id;
-      document.documentElement.lang = lang;
-      var n;
-      n = document.querySelectorAll('[data-i18n]'); for (var i = 0; i < n.length; i++) { var k = n[i].getAttribute('data-i18n'); if (dict[k] != null) n[i].textContent = dict[k]; }
-      n = document.querySelectorAll('[data-i18n-html]'); for (var j = 0; j < n.length; j++) { var k2 = n[j].getAttribute('data-i18n-html'); if (dict[k2] != null) n[j].innerHTML = dict[k2]; }
-      n = document.querySelectorAll('[data-i18n-aria]'); for (var m = 0; m < n.length; m++) { var k3 = n[m].getAttribute('data-i18n-aria'); if (dict[k3] != null) n[m].setAttribute('aria-label', dict[k3]); }
-      if (dict['doc.title']) document.title = dict['doc.title'];
-      var d = document.querySelector('meta[name="description"]'); if (d && dict['meta.description']) d.setAttribute('content', dict['meta.description']);
-      var ot = document.querySelector('meta[property="og:title"]'); if (ot && dict['og.title']) ot.setAttribute('content', dict['og.title']);
-      var od = document.querySelector('meta[property="og:description"]'); if (od && dict['og.description']) od.setAttribute('content', dict['og.description']);
-      var btns = document.querySelectorAll('.lang button');
-      for (var b = 0; b < btns.length; b++) btns[b].setAttribute('aria-pressed', btns[b].getAttribute('data-lang') === lang ? 'true' : 'false');
-      try { localStorage.setItem('streamy.lang', lang); } catch (e) {}
-    }
-
-    var lang = 'id';
-    try { lang = localStorage.getItem('streamy.lang') || 'id'; } catch (e) {}
-    applyLang(lang);
-    var btns = document.querySelectorAll('.lang button');
-    for (var b = 0; b < btns.length; b++) btns[b].addEventListener('click', function () { applyLang(this.getAttribute('data-lang')); });
-  })();
-</script>
-
-<!-- Fade-in on scroll (atmospheric: fade only). Reduced-motion users see content instantly via CSS. -->
-<script>
-  (function () {
-    var els = document.querySelectorAll('.reveal');
-    if (!('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('is-in'); }); return; }
-    var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('is-in'); io.unobserve(en.target); } });
-    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
-    els.forEach(function (e) { io.observe(e); });
-  })();
-</script>
 
 </body>
 </html>
