@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Panduan Operasional — Siaran Live, AutoDJ, dan Mode Source | Streamy</title>
+  <meta name="description" content="Panduan operasional lengkap: siaran live dengan Winamp + SHOUTcast DSP, mengelola AutoDJ murottal, perbedaan Direct Source vs DJ, mengelola pendengar, dan troubleshooting." />
+  <meta name="theme-color" content="#F7F2E9" />
+  <link rel="canonical" href="https://streamy-app.pages.dev/desktop/panduan.html" />
+
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content="https://streamy-app.pages.dev/desktop/panduan.html" />
+  <meta property="og:title" content="Panduan Operasional — Siaran Live, AutoDJ, dan Mode Source" />
+  <meta property="og:description" content="Cara mengoperasikan stasiun: siaran live dengan Winamp + SHOUTcast DSP, AutoDJ murottal, Direct Source vs DJ, dan troubleshooting." />
+  <meta name="twitter:card" content="summary" />
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23F7F2E9'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%2365A30D'/%3E%3C/svg%3E" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              lime: '#65A30D',
+              limedark: '#4D7C0F',
+              cream: '#F7F2E9',
+              cream2: '#FDFBF6',
+              sand: '#EDE5D6',
+              ink: '#241F1A',
+              ink2: '#5C554C'
+            }
+          },
+          fontFamily: {
+            display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+            body: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* Gaya dokumen panduan di atas token brand */
+    .prose-guide h2 { font-family: var(--font-display, 'Space Grotesk', sans-serif); }
+    .prose-guide table { width: 100%; border-collapse: collapse; }
+    .prose-guide th { text-align: left; font-weight: 600; }
+    .prose-guide th, .prose-guide td { border: 1px solid rgba(36,31,26,0.12); padding: 0.5rem 0.75rem; vertical-align: top; }
+    .prose-guide thead th { background: rgba(101,163,13,0.08); }
+    .prose-guide code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 0.85em; background: rgba(36,31,26,0.06); border-radius: 4px; padding: 0.1em 0.35em; }
+    .prose-guide ol { list-style: decimal; padding-left: 1.5rem; }
+    .prose-guide ol li { margin-bottom: 0.4rem; }
+    .prose-guide ul { list-style: disc; padding-left: 1.5rem; }
+    .prose-guide ul li { margin-bottom: 0.4rem; }
+    .prose-guide a { color: #4D7C0F; text-decoration: underline; text-underline-offset: 2px; }
+    .prose-guide a:hover { color: #65A30D; }
+    html { scroll-behavior: smooth; }
+  </style>
+</head>
+<body class="bg-brand-cream text-brand-ink font-body antialiased" style="background-image: radial-gradient(50% 40% at 15% -5%, rgba(101,163,13,0.06), transparent 70%), radial-gradient(45% 35% at 95% 5%, rgba(101,163,13,0.05), transparent 72%);">
+
+<!-- ==================== NAVBAR ==================== -->
+<header class="sticky top-0 z-50 bg-brand-cream/80 backdrop-blur border-b border-brand-ink/10">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6">
+    <nav class="flex items-center justify-between h-16">
+      <a href="/" class="flex items-center gap-2.5 shrink-0">
+        <span class="w-3 h-3 rounded-full bg-brand-lime"></span>
+        <span class="font-display font-bold text-xl tracking-tight">Streamy</span>
+      </a>
+      <div class="hidden md:flex items-center gap-8">
+        <a href="/android/" class="text-sm font-medium text-brand-ink2 hover:text-brand-lime transition-colors">Android</a>
+        <a href="/desktop/" class="text-sm font-medium text-brand-ink2 hover:text-brand-lime transition-colors">Desktop</a>
+        <a href="/panel/" class="text-sm font-medium text-brand-ink2 hover:text-brand-lime transition-colors">Panel</a>
+      </div>
+      <a href="#top" class="inline-flex items-center px-4 py-2 bg-brand-lime text-white text-sm font-semibold rounded-lg hover:bg-brand-limedark transition-colors shadow-sm">
+        Daftar Isi
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="top" class="py-12 md:py-16 px-6">
+  <article class="prose-guide max-w-3xl mx-auto bg-brand-cream2 rounded-3xl border border-brand-ink/10 px-6 md:px-12 py-10 md:py-14">
+
+    <!-- Header dokumen -->
+    <p class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-brand-lime/30 bg-brand-lime/5 text-brand-lime text-xs font-mono font-medium tracking-wide uppercase mb-6">
+      Panduan · Streamy Panel
+    </p>
+    <h1 class="text-3xl md:text-4xl font-display font-bold tracking-tight mb-4">Panduan Operasional untuk Pengguna</h1>
+    <p class="text-lg text-brand-ink2 mb-8 leading-relaxed">Panduan ini menjelaskan cara mengoperasikan stasiun radio Anda di Streamy Panel: melakukan siaran live dengan Winamp + SHOUTcast DSP, mengelola AutoDJ, serta memahami perbedaan mode <strong class="text-brand-ink">Direct source</strong> dan <strong class="text-brand-ink">DJ</strong>.</p>
+
+    <!-- Daftar isi -->
+    <nav class="rounded-2xl border border-brand-ink/10 bg-brand-cream p-6 mb-12" aria-label="Daftar isi">
+      <p class="font-mono text-xs font-semibold text-brand-lime tracking-wider uppercase mb-4">Daftar Isi</p>
+      <ol class="space-y-2 text-sm text-brand-ink2">
+        <li><a href="#1-konsep-dasar" class="hover:text-brand-lime">1. Konsep Dasar</a></li>
+        <li><a href="#2-masuk-ke-panel-dan-halaman-stasiun" class="hover:text-brand-lime">2. Masuk ke Panel dan Halaman Stasiun</a></li>
+        <li><a href="#3-siaran-live-dengan-winamp-dan-shoutcast-dsp" class="hover:text-brand-lime">3. Siaran Live dengan Winamp dan SHOUTcast DSP</a></li>
+        <li><a href="#4-mengelola-autodj" class="hover:text-brand-lime">4. Mengelola AutoDJ</a></li>
+        <li><a href="#5-direct-source-vs-dj-kapan-pakai-yang-mana" class="hover:text-brand-lime">5. Direct Source vs DJ: Kapan Pakai yang Mana</a></li>
+        <li><a href="#6-mengelola-pendengar-listener" class="hover:text-brand-lime">6. Mengelola Pendengar (Listener)</a></li>
+        <li><a href="#7-troubleshooting" class="hover:text-brand-lime">7. Troubleshooting</a></li>
+      </ol>
+    </nav>
+
+    <!-- ==================== 1. KONSEP DASAR ==================== -->
+    <section class="mb-12">
+      <h2 id="1-konsep-dasar" class="text-2xl font-display font-bold tracking-tight mb-4 pt-2 border-t border-brand-ink/10">1. Konsep Dasar</h2>
+      <p class="text-brand-ink2 mb-4">Sebelum mulai, pahami tiga istilah ini:</p>
+      <div class="overflow-x-auto mb-4">
+        <table>
+          <thead><tr><th>Istilah</th><th>Artinya</th></tr></thead>
+          <tbody class="text-sm text-brand-ink2">
+            <tr><td><strong class="text-brand-ink">Station (stasiun)</strong></td><td>Radio Anda: satu server Shoutcast dengan host, port, format (MP3/AAC), bitrate, dan batas pendengar.</td></tr>
+            <tr><td><strong class="text-brand-ink">AutoDJ</strong></td><td>Lantunan murottal otomatis. Server memutar playlist dari pustaka media Anda tanpa perlu DJ online.</td></tr>
+            <tr><td><strong class="text-brand-ink">Source / DJ</strong></td><td>Sumber audio live yang Anda kirim dari komputer (Winamp, Mixxx, BUTT, SAM Broadcaster, dsb.). Saat DJ connect, siaran live otomatis mengambil alih dari AutoDJ. Saat DJ disconnect, AutoDJ lanjut otomatis tanpa hening.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-brand-ink2 mb-4">Ada dua jenis stasiun di Streamy Panel:</p>
+      <ul class="text-brand-ink2 text-sm space-y-2 mb-4">
+        <li><strong class="text-brand-ink">Stasiun biasa (dengan AutoDJ)</strong> — punya media library, playlist, jadwal, dan <strong class="text-brand-ink">DJ port</strong> khusus untuk siaran live.</li>
+        <li><strong class="text-brand-ink">Stasiun live-only</strong> — hanya bisa siaran ketika DJ online. Tidak ada AutoDJ, tidak ada DJ port. Pendengar tidak mendengar apa pun sampai Anda connect.</li>
+      </ul>
+      <blockquote class="border-l-4 border-brand-lime/50 bg-brand-lime/5 rounded-r-lg px-4 py-3 text-sm text-brand-ink2">Tipe stasiun ditentukan admin saat pembuatan. Di daftar stasiun, stasiun live-only ditandai badge <strong class="text-brand-ink">Live only</strong>.</blockquote>
+    </section>
+
+    <!-- ==================== 2. MASUK KE PANEL ==================== -->
+    <section class="mb-12">
+      <h2 id="2-masuk-ke-panel-dan-halaman-stasiun" class="text-2xl font-display font-bold tracking-tight mb-4 pt-2 border-t border-brand-ink/10">2. Masuk ke Panel dan Halaman Stasiun</h2>
+      <ol class="text-brand-ink2 text-sm mb-4">
+        <li>Buka alamat panel Anda, misalnya <code>https://panel.radioanda.com</code>, lalu login dengan email dan password yang diberikan admin.</li>
+        <li>Halaman pertama adalah <strong class="text-brand-ink">daftar stasiun</strong>: status (LIVE/STOPPED), format dan bitrate, port, jumlah pendengar real-time, serta tombol <strong class="text-brand-ink">Start</strong> / <strong class="text-brand-ink">Stop</strong>.
+          <ul class="mt-2">
+            <li>Badge <strong class="text-brand-ink">AutoDJ</strong> = lantunan murottal otomatis sedang aktif di stasiun itu.</li>
+            <li>Jumlah pendengar menyegarkan otomatis setiap 15 detik tanpa perlu reload.</li>
+          </ul>
+        </li>
+        <li>Klik nama stasiun untuk membuka <strong class="text-brand-ink">Station Console</strong> — pusat kendali Anda.</li>
+      </ol>
+      <p class="text-brand-ink2 text-sm mb-4">Di console Anda menemukan:</p>
+      <ul class="text-brand-ink2 text-sm space-y-2 mb-4">
+        <li><strong class="text-brand-ink">Start / Stop / Restart</strong> — menghidupkan atau mematikan server siaran.</li>
+        <li><strong class="text-brand-ink">Tombol AutoDJ: Active/Standby</strong> — menyalakan/mematikan lantunan otomatis.</li>
+        <li><strong class="text-brand-ink">Tab Overview, Media library, Playlists, Schedule matrix</strong>.</li>
+        <li><strong class="text-brand-ink">Connection telemetry</strong> — host, port, dan <strong class="text-brand-ink">source password</strong> (klik ikon mata untuk melihat, ikon salin untuk menyalin).</li>
+        <li><strong class="text-brand-ink">Bagian DJ / live source</strong> — kredensial untuk siaran live.</li>
+      </ul>
+      <blockquote class="border-l-4 border-brand-lime/50 bg-brand-lime/5 rounded-r-lg px-4 py-3 text-sm text-brand-ink2"><strong class="text-brand-ink">Penting:</strong> tombol AutoDJ hanya aktif jika stasiun sudah <strong class="text-brand-ink">RUNNING</strong>. Jadi urutannya selalu: Start stasiun dulu, baru nyalakan AutoDJ.</blockquote>
+    </section>
+
+    <!-- ==================== 3. SIARAN LIVE WINAMP + DSP ==================== -->
+    <section class="mb-12">
+      <h2 id="3-siaran-live-dengan-winamp-dan-shoutcast-dsp" class="text-2xl font-display font-bold tracking-tight mb-4 pt-2 border-t border-brand-ink/10">3. Siaran Live dengan Winamp dan SHOUTcast DSP</h2>
+      <p class="text-brand-ink2 text-sm mb-6">Cara paling umum untuk siaran live dari komputer Windows: <strong class="text-brand-ink">Winamp</strong> + plugin <strong class="text-brand-ink">SHOUTcast Source DSP</strong>.</p>
+
+      <h3 class="font-bold mb-3">3.1 Yang perlu disiapkan</h3>
+      <ul class="text-brand-ink2 text-sm space-y-2 mb-6">
+        <li>Winamp 5.9 (atau lebih baru) — <a href="https://www.winamp.com">winamp.com</a></li>
+        <li>Plugin <strong class="text-brand-ink">SHOUTcast Source DSP</strong> for Winamp — unduh dari <a href="https://shoutcast.com/broadcast-tools">shoutcast.com/broadcast-tools</a> (pilih <em>SHOUTcast Source DSP Plug-in</em>).</li>
+        <li>Kredensial DJ dari Station Console → bagian <strong class="text-brand-ink">DJ / live source (DNASv2 / Shoutcast)</strong>:
+          <div class="overflow-x-auto mt-3">
+            <table>
+              <thead><tr><th>Parameter</th><th>Nilai</th></tr></thead>
+              <tbody>
+                <tr><td><strong class="text-brand-ink">Server host</strong></td><td>host panel Anda, misal <code>panel.radioanda.com</code></td></tr>
+                <tr><td><strong class="text-brand-ink">DJ port</strong></td><td>angka di baris <em>DJ port (v1 + v2 auto-detect)</em>, misal <code>9010</code></td></tr>
+                <tr><td><strong class="text-brand-ink">DJ login ID</strong></td><td><code>dj</code></td></tr>
+                <tr><td><strong class="text-brand-ink">DJ password</strong></td><td>sama dengan <strong class="text-brand-ink">source password</strong> stasiun</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </li>
+      </ul>
+
+      <h3 class="font-bold mb-3">3.2 Install plugin</h3>
+      <ol class="text-brand-ink2 text-sm mb-6">
+        <li>Jalankan installer DSP, arahkan ke folder Winamp Anda (biasanya <code>C:\Program Files (x86)\Winamp</code>).</li>
+        <li>Buka Winamp → <code>Options</code> (Ctrl+P) → <code>Plug-ins</code> → <code>DSP/Effect</code> → pilih <strong class="text-brand-ink">Nullsoft SHOUTcast Source DSP</strong>.</li>
+        <li>Jendela DSP terbuka. Winamp harus <strong class="text-brand-ink">tetap berjalan</strong> selama siaran (bisa diminimalkan).</li>
+      </ol>
+
+      <h3 class="font-bold mb-3">3.3 Konfigurasi DSP</h3>
+      <p class="text-brand-ink2 text-sm mb-3"><strong class="text-brand-ink">Tab Output</strong> (Output 1):</p>
+      <ol class="text-brand-ink2 text-sm mb-6">
+        <li><strong class="text-brand-ink">Address</strong>: host panel Anda, misal <code>panel.radioanda.com</code></li>
+        <li><strong class="text-brand-ink">Port</strong>: DJ port Anda, misal <code>9010</code></li>
+        <li><strong class="text-brand-ink">User ID</strong>: <code>dj</code></li>
+        <li><strong class="text-brand-ink">Password</strong>: DJ password (source password). Centang <em>Remember password</em> agar tidak mengetik ulang.</li>
+        <li>Mode koneksi: pilih <strong class="text-brand-ink">DNASv2</strong> (disarankan). Mode Shoutcast v1 juga didukung — panel mendeteksi keduanya otomatis di port yang sama.</li>
+        <li>Aktifkan <strong class="text-brand-ink">Automatic reconnection</strong> supaya koneksi pulih sendiri bila internet terputus sebentar.</li>
+      </ol>
+      <p class="text-brand-ink2 text-sm mb-3"><strong class="text-brand-ink">Tab Encoder</strong> (Encoder 1):</p>
+      <ol class="text-brand-ink2 text-sm mb-6">
+        <li><strong class="text-brand-ink">Encoder Type</strong>: MP3</li>
+        <li><strong class="text-brand-ink">Settings</strong>: samakan dengan stasiun Anda, misal <code>128kbps, 44100 Hz, Stereo</code>. Audio DJ di-encode ulang oleh server sesuai format stasiun, jadi ketidakcocokan bitrate tidak fatal — tapi menyeragamkan memberi kualitas terbaik.</li>
+      </ol>
+      <p class="text-brand-ink2 text-sm mb-3"><strong class="text-brand-ink">Tab Yellowpages</strong> (opsional, tapi bagus untuk tampilan):</p>
+      <ol class="text-brand-ink2 text-sm mb-6">
+        <li><strong class="text-brand-ink">Stream Name</strong>: nama siaran Anda (misal "Radio Murottal 24 Jam").</li>
+        <li><strong class="text-brand-ink">Genre</strong>, <strong class="text-brand-ink">URL</strong>, dan <strong class="text-brand-ink">Description</strong> boleh diisi sesuai selera. Ini yang dilihat pendengar di pemutar radio mereka.</li>
+      </ol>
+      <p class="text-brand-ink2 text-sm mb-3"><strong class="text-brand-ink">Tab Input</strong>:</p>
+      <ul class="text-brand-ink2 text-sm space-y-2 mb-6">
+        <li><strong class="text-brand-ink">Input Device</strong>: <code>Winamp (Recommended)</code> untuk memutar file murottal dari Winamp, atau <code>Soundcard Input</code> jika ingin menyiarkan mikrofon / line-in (misal mixer atau kajian/talkshow). Untuk mode soundcard, atur <strong class="text-brand-ink">Input Configures</strong> ke <code>44100 Hz, Stereo</code>.</li>
+        <li>Di mode Soundcard, gunakan tombol <strong class="text-brand-ink">Push to Talk</strong> atau centang <strong class="text-brand-ink">Lock</strong> agar mic terus aktif.</li>
+      </ul>
+
+      <h3 class="font-bold mb-3">3.4 Mulai siaran</h3>
+      <ol class="text-brand-ink2 text-sm mb-4">
+        <li>Pastikan stasiun <strong class="text-brand-ink">RUNNING</strong> (di console, lampu status hijau/LIVE). Jika AutoDJ belum jalan, nyalakan dulu lewat tombol <strong class="text-brand-ink">AutoDJ: Standby</strong> — <strong class="text-brand-ink">DJ port hanya terbuka saat AutoDJ aktif</strong>.</li>
+        <li>Kembali ke tab <strong class="text-brand-ink">Output</strong> di DSP, klik <strong class="text-brand-ink">Connect</strong>.</li>
+        <li>Status berubah menjadi <strong class="text-brand-ink">Sent xxx bytes</strong> yang terus bertambah = Anda sedang live.</li>
+        <li>Cek di panel: <em>Now playing</em> berganti sesuai lantunan Anda, dan pendengar mulai mendengar suara Anda (bukan AutoDJ).</li>
+      </ol>
+      <p class="text-brand-ink2 text-sm mb-4">Selama Anda live, AutoDJ otomatis <em>pause</em>. Saat Anda klik <strong class="text-brand-ink">Disconnect</strong> (atau Winamp ditutup), AutoDJ menyambung kembali otomatis dalam beberapa detik hingga ± 30 detik.</p>
+      <blockquote class="border-l-4 border-brand-lime/50 bg-brand-lime/5 rounded-r-lg px-4 py-3 text-sm text-brand-ink2"><strong class="text-brand-ink">Judul (now playing):</strong> DSP mengirim judul otomatis dari file yang diputar Winamp. Saat DJ disconnect, judul kembali mengikuti AutoDJ.</blockquote>
+    </section>
+
+    <!-- ==================== 4. AUTODJ ==================== -->
+    <section class="mb-12">
+      <h2 id="4-mengelola-autodj" class="text-2xl font-display font-bold tracking-tight mb-4 pt-2 border-t border-brand-ink/10">4. Mengelola AutoDJ</h2>
+      <p class="text-brand-ink2 text-sm mb-6">AutoDJ memutar playlist murottal Anda 24 jam tanpa DJ. Alur kerjanya: <strong class="text-brand-ink">upload media → susun playlist → aktifkan playlist → (opsional) atur jadwal → start AutoDJ</strong>.</p>
+
+      <h3 class="font-bold mb-3">4.1 Menyalakan dan mematikan AutoDJ</h3>
+      <ul class="text-brand-ink2 text-sm space-y-2 mb-6">
+        <li>Di Station Console, klik <strong class="text-brand-ink">AutoDJ: Standby</strong> untuk menyalakan, <strong class="text-brand-ink">AutoDJ: Active</strong> untuk mematikan. Stasiun harus RUNNING dulu.</li>
+        <li>Di halaman daftar stasiun, tombol <strong class="text-brand-ink">Start all AutoDJ</strong> menyalakan AutoDJ untuk semua stasiun live sekaligus.</li>
+      </ul>
+
+      <h3 class="font-bold mb-3">4.2 Upload media (tab Media library)</h3>
+      <ol class="text-brand-ink2 text-sm mb-6">
+        <li>Buka tab <strong class="text-brand-ink">Media library</strong>.</li>
+        <li>Klik <strong class="text-brand-ink">Upload</strong> atau seret-dan-lepas file ke area upload. Unggah banyak file sekaligus didukung.</li>
+        <li>Format yang diterima: <strong class="text-brand-ink">MP3, AAC, OGG, FLAC, WAV, M4A</strong>. Ukuran maksimum per file <strong class="text-brand-ink">200 MB</strong>.</li>
+        <li>Gunakan <strong class="text-brand-ink">folder</strong> untuk mengelompokkan (misal folder "Murottal", "Majelis", "Spanduk Pengumuman"): buat folder lewat kolom nama di atas, klik nama folder untuk memfilter tampilan, dan upload saat folder dipilih agar file langsung masuk ke folder itu.</li>
+        <li>Bar <strong class="text-brand-ink">storage</strong> di atas menunjukkan kuota yang terpakai. Melebihi kuota = upload ditolak.</li>
+        <li>Hapus file dengan ikon tempat sampah. Menambah/menghapus file tidak otomatis mengubah playlist yang sudah ada — playlist lama bisa menunjukkan file yang sudah dihapus sampai Anda memperbaruinya.</li>
+      </ol>
+
+      <h3 class="font-bold mb-3">4.3 Menyusun playlist (tab Playlists)</h3>
+      <ol class="text-brand-ink2 text-sm mb-6">
+        <li>Tulis nama playlist (misal "Murottal Pagi") lalu klik <strong class="text-brand-ink">Create</strong>.</li>
+        <li>Klik playlist untuk membukanya. Tambahkan isi dengan dua cara:
+          <ul class="mt-2">
+            <li><strong class="text-brand-ink">Add media</strong>: pilih satu file dari media library, atau</li>
+            <li><strong class="text-brand-ink">Add folder</strong>: seret seluruh isi folder sekaligus.</li>
+          </ul>
+        </li>
+        <li>Atur <strong class="text-brand-ink">mode</strong> playlist:
+          <ul class="mt-2">
+            <li><strong class="text-brand-ink">Shuffle</strong> — urutan acak (default, cocok untuk rotasi umum).</li>
+            <li><strong class="text-brand-ink">Sequential</strong> — sesuai urutan daftar. Susun ulang dengan <strong class="text-brand-ink">drag-and-drop</strong> baris file.</li>
+          </ul>
+        </li>
+        <li>Klik <strong class="text-brand-ink">Activate</strong> agar playlist ikut diputar AutoDJ. <strong class="text-brand-ink">Beberapa playlist bisa aktif bersamaan</strong> — isinya digabung dan diacak antar playlist. Nonaktifkan dengan <strong class="text-brand-ink">Deactivate</strong>.</li>
+        <li>Menghapus playlist <strong class="text-brand-ink">tidak</strong> menghapus file dari media library.</li>
+      </ol>
+
+      <h3 class="font-bold mb-3">4.4 Jadwal rotasi (tab Schedule matrix)</h3>
+      <p class="text-brand-ink2 text-sm mb-3">Buat blok jadwal agar playlist tertentu hanya diputar pada jam tertentu, misal playlist "Murottal Tahajud" tiap malam atau "Kajian" tiap Jumat pagi:</p>
+      <ol class="text-brand-ink2 text-sm mb-4">
+        <li>Klik <strong class="text-brand-ink">Add block</strong>.</li>
+        <li>Pilih <strong class="text-brand-ink">playlist</strong>, centang <strong class="text-brand-ink">hari</strong> (Sen–Min), atur <strong class="text-brand-ink">jam mulai</strong> dan <strong class="text-brand-ink">jam selesai</strong> (format 24 jam), lalu isi <strong class="text-brand-ink">priority</strong>.</li>
+        <li><strong class="text-brand-ink">Priority</strong> mengatur siapa yang menang bila dua jadwal bertabrakan pada jam yang sama — angka lebih tinggi lebih diprioritaskan (default 10).</li>
+        <li>Jika tidak ada jadwal yang cocok dengan waktu sekarang, AutoDJ memutar playlist aktif yang tidak terjadwal (fallback).</li>
+      </ol>
+      <blockquote class="border-l-4 border-brand-lime/50 bg-brand-lime/5 rounded-r-lg px-4 py-3 text-sm text-brand-ink2 mb-6">Perubahan media/playlist/jadwal dibaca ulang oleh AutoDJ otomatis — tidak perlu restart. Jika merasa rotasi tidak berubah, matikan lalu nyalakan AutoDJ.</blockquote>
+
+      <h3 class="font-bold mb-3">4.5 AutoDJ + DJ live bekerja sama</h3>
+      <div class="overflow-x-auto">
+        <table>
+          <thead><tr><th>Kejadian</th><th>Hasil</th></tr></thead>
+          <tbody class="text-sm text-brand-ink2">
+            <tr><td>DJ connect ke DJ port</td><td>Siaran live langsung menggantikan AutoDJ (preempt).</td></tr>
+            <tr><td>DJ disconnect</td><td>AutoDJ menyambung otomatis dalam ± 30 detik.</td></tr>
+            <tr><td>Ada DJ lain connect saat satu DJ sudah live</td><td>Ditolak server — slot DJ hanya satu per stasiun.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== 5. DIRECT SOURCE VS DJ ==================== -->
+    <section class="mb-12">
+      <h2 id="5-direct-source-vs-dj-kapan-pakai-yang-mana" class="text-2xl font-display font-bold tracking-tight mb-4 pt-2 border-t border-brand-ink/10">5. Direct Source vs DJ: Kapan Pakai yang Mana</h2>
+      <p class="text-brand-ink2 text-sm mb-6">Ada <strong class="text-brand-ink">dua jalur</strong> untuk mengirim audio ke stasiun Anda. Panel menentukan jalur mana yang tersedia berdasarkan tipe stasiun.</p>
+
+      <h3 class="font-bold mb-3">5.1 DJ port (stasiun dengan AutoDJ)</h3>
+      <p class="text-brand-ink2 text-sm mb-3">Ini jalur di Bagian 3 di atas: Winamp DSP connect ke <strong class="text-brand-ink">DJ port</strong>, login <code>dj</code>, password source password.</p>
+      <p class="text-brand-ink2 text-sm mb-2"><strong class="text-brand-ink">Karakteristik:</strong></p>
+      <ul class="text-brand-ink2 text-sm space-y-2 mb-6">
+        <li>DJ port hanya aktif saat AutoDJ berjalan.</li>
+        <li>Konek DJ otomatis <strong class="text-brand-ink">preempt</strong> AutoDJ; disconnect otomatis kembali ke AutoDJ — pendengar tidak mendengar keheningan.</li>
+        <li>Cocok untuk: siaran live sesekali di atas lantunan murottal 24 jam (model paling umum).</li>
+      </ul>
+
+      <h3 class="font-bold mb-3">5.2 Direct source / live-only (connect langsung ke port server)</h3>
+      <p class="text-brand-ink2 text-sm mb-3">Pada <strong class="text-brand-ink">stasiun live-only</strong>, tidak ada AutoDJ dan tidak ada DJ port. Anda connect <strong class="text-brand-ink">langsung ke port utama stasiun</strong>:</p>
+      <div class="overflow-x-auto mb-3">
+        <table>
+          <thead><tr><th>Parameter</th><th>Nilai</th></tr></thead>
+          <tbody class="text-sm text-brand-ink2">
+            <tr><td><strong class="text-brand-ink">Address</strong></td><td>host panel Anda, misal <code>panel.radioanda.com</code></td></tr>
+            <tr><td><strong class="text-brand-ink">Live source port</strong></td><td>port utama stasiun (di console tertulis <em>Live source port</em>), misal <code>9000</code></td></tr>
+            <tr><td><strong class="text-brand-ink">User ID</strong></td><td><code>dj</code> (boleh diisi apa pun)</td></tr>
+            <tr><td><strong class="text-brand-ink">Password</strong></td><td><strong class="text-brand-ink">source password</strong> stasiun</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-brand-ink2 text-sm mb-3">Di Winamp DSP: isikan Output dengan port tersebut, mode DNASv2 atau Shoutcast v1 sama-sama diterima. Aplikasi lain (Mixxx, BUTT, SAM Broadcaster, aplikasi Android/iOS Icecast) juga bisa dipakai dengan kredensial yang sama.</p>
+      <p class="text-brand-ink2 text-sm mb-2"><strong class="text-brand-ink">Karakteristik:</strong></p>
+      <ul class="text-brand-ink2 text-sm space-y-2 mb-6">
+        <li>Siaran <strong class="text-brand-ink">hening</strong> sampai Anda connect — pendengar yang membuka stream menunggu tanpa suara.</li>
+        <li>Anda disconnect = siaran hening kembali. Tidak ada cadangan AutoDJ.</li>
+        <li>Cocok untuk: stasiun acara khusus, siaran komunitas yang hanya hidup pada jam tertentu, atau penggunaan sebagai endpoint relay dari encoder/mixer hardware.</li>
+      </ul>
+
+      <h3 class="font-bold mb-3">5.3 Ringkasan perbedaan</h3>
+      <div class="overflow-x-auto">
+        <table>
+          <thead><tr><th></th><th>Stasiun AutoDJ</th><th>Stasiun live-only</th></tr></thead>
+          <tbody class="text-sm text-brand-ink2">
+            <tr><td><strong class="text-brand-ink">Port tujuan DJ</strong></td><td>DJ port (mis. 9010)</td><td>Port utama stasiun (mis. 9000)</td></tr>
+            <tr><td><strong class="text-brand-ink">Login</strong></td><td><code>dj</code> + source password</td><td>user bebas + source password</td></tr>
+            <tr><td><strong class="text-brand-ink">AutoDJ 24 jam</strong></td><td>Ya</td><td>Tidak (hening tanpa DJ)</td></tr>
+            <tr><td><strong class="text-brand-ink">Saat DJ disconnect</strong></td><td>AutoDJ lanjut otomatis</td><td>Hening</td></tr>
+            <tr><td><strong class="text-brand-ink">Media library / playlist / jadwal</strong></td><td>Ada</td><td>Tidak ada</td></tr>
+            <tr><td><strong class="text-brand-ink">DJ port butuh AutoDJ aktif</strong></td><td>Ya</td><td>Tidak berlaku (tak ada DJ port)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== 6. PENDENGAR ==================== -->
+    <section class="mb-12">
+      <h2 id="6-mengelola-pendengar-listener" class="text-2xl font-display font-bold tracking-tight mb-4 pt-2 border-t border-brand-ink/10">6. Mengelola Pendengar (Listener)</h2>
+      <p class="text-brand-ink2 text-sm mb-4">Di Station Console, bagian <strong class="text-brand-ink">Active listeners</strong> (menyegarkan tiap 8 detik):</p>
+      <ul class="text-brand-ink2 text-sm space-y-2 mb-4">
+        <li><strong class="text-brand-ink">IP address</strong> dan <strong class="text-brand-ink">client user-agent</strong> tiap pendengar yang sedang tersambung.</li>
+        <li>Tombol <strong class="text-brand-ink">Ban IP</strong> memutus dan memblokir pendengar tersebut agar tidak bisa menyambung lagi. Gunakan untuk penyadap bandwidth atau penyalahgunaan — bukan untuk pembalasan.</li>
+        <li>Kartu statistik di atasnya menunjukkan <strong class="text-brand-ink">listeners</strong>, <strong class="text-brand-ink">unique listeners</strong>, dan <strong class="text-brand-ink">bitrate/encoding</strong> real-time, plus grafik riwayat pendengar.</li>
+      </ul>
+    </section>
+
+    <!-- ==================== 7. TROUBLESHOOTING ==================== -->
+    <section class="mb-12">
+      <h2 id="7-troubleshooting" class="text-2xl font-display font-bold tracking-tight mb-4 pt-2 border-t border-brand-ink/10">7. Troubleshooting</h2>
+      <div class="overflow-x-auto">
+        <table>
+          <thead><tr><th>Gejala</th><th>Sebab &amp; solusi</th></tr></thead>
+          <tbody class="text-sm text-brand-ink2">
+            <tr><td>DSP connect terus gagal</td><td>Cek: stasiun <strong class="text-brand-ink">RUNNING</strong>, AutoDJ <strong class="text-brand-ink">aktif</strong> (DJ port terbuka), Address/Port/User ID/Password sesuai bagian 3.1. Port tujuan adalah <strong class="text-brand-ink">DJ port</strong>, bukan port stasiun.</td></tr>
+            <tr><td>Warning di console: "DJ port offline"</td><td>AutoDJ sedang standby. Nyalakan AutoDJ, DJ port langsung terbuka.</td></tr>
+            <tr><td>Connect berhasil tapi pendengar tetap dengar AutoDJ</td><td>Beri waktu ± 30 detik. Bila tetap, disconnect dan connect ulang DSP.</td></tr>
+            <tr><td>Judul tidak berubah di pemutar</td><td>DSP tab Yellowpages/Input: pastikan <em>Enable Title Updates</em> aktif dan file punya metadata ID3.</td></tr>
+            <tr><td>Upload ditolak "exceeds quota"</td><td>Kuota stasiun penuh — hapus file lama di Media library atau hubungi admin untuk menaikkan kuota.</td></tr>
+            <tr><td>Upload ditolak "unsupported file type"</td><td>Hanya MP3/AAC/OGG/FLAC/WAV/M4A. Konversi dulu bila formatnya lain (misal WMA).</td></tr>
+            <tr><td>AutoDJ tidak memutar file baru</td><td>Pastikan playlist berisi file tsb dan playlist di-<strong class="text-brand-ink">Activate</strong>; jika perlu restart AutoDJ.</td></tr>
+            <tr><td>Stasiun tidak mau Start</td><td>Kemungkinan stasiun <strong class="text-brand-ink">Suspended</strong> oleh admin (badge oranye). Hubungi admin.</td></tr>
+            <tr><td>Pendengar tidak bisa membuka stream</td><td>Port stream stasiun Anda (mis. <code>9000</code>) harus terbuka di firewall; URL pendengar yang benar adalah <code>http://host:port/;</code> (dengan titik-koma) — dipakai apa adanya di Winamp/iTunes/VLC atau pemutar online. Tanpa <code>/;</code> yang terbuka adalah halaman status, bukan audio.</td></tr>
+            <tr><td>Password tidak jalan setelah diganti admin</td><td>Password lama yang tersimpan di DSP tidak berlaku lagi. Salin password baru dari console (ikon salin) dan perbarui DSP.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================== LAMPIRAN ==================== -->
+    <section class="mb-8">
+      <h2 id="lampiran-ringkasan-kredensial" class="text-2xl font-display font-bold tracking-tight mb-4 pt-2 border-t border-brand-ink/10">Lampiran: Ringkasan Kredensial</h2>
+      <div class="overflow-x-auto mb-6">
+        <table>
+          <thead><tr><th>Kebutuhan</th><th>Ambil dari</th><th>Nilai</th></tr></thead>
+          <tbody class="text-sm text-brand-ink2">
+            <tr><td>Dengar siaran</td><td>bagikan ke pendengar</td><td><code>http://&lt;host&gt;:&lt;port stasiun>/;</code> (contoh: <code>http://streamy1.radioislam.my.id:9000/;</code>)</td></tr>
+            <tr><td>Siaran live via DJ port</td><td>console → <em>DJ / live source</em></td><td>host + <strong class="text-brand-ink">DJ port</strong> + user <code>dj</code> + source password</td></tr>
+            <tr><td>Siaran live-only</td><td>console → <em>Live source port</em></td><td>host + <strong class="text-brand-ink">port stasiun</strong> + source password</td></tr>
+            <tr><td>AutoDJ</td><td>tab Media library / Playlists / Schedule</td><td>upload → playlist → activate → AutoDJ on</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-brand-ink2">Jika masih bermasalah setelah panduan ini, hubungi admin panel Anda dan sertakan: nama stasiun, waktu kejadian, dan pesan error yang tampil di console/DSP.</p>
+    </section>
+
+  </article>
+
+  <!-- CTA kembali -->
+  <div class="max-w-3xl mx-auto mt-10 text-center">
+    <a href="/desktop/" class="inline-flex items-center gap-2 px-6 py-3 bg-brand-lime text-white font-semibold rounded-lg hover:bg-brand-limedark transition-colors shadow-lg shadow-lime-600/20">
+      <svg class="w-4 h-4 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+      Kembali ke Streamy Desktop
+    </a>
+  </div>
+</main>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="py-10 px-6 border-t border-brand-ink/10">
+  <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+    <div class="flex items-center gap-2.5">
+      <span class="w-2.5 h-2.5 rounded-full bg-brand-lime"></span>
+      <span class="font-display font-bold">Streamy</span>
+    </div>
+    <div class="flex gap-8">
+      <a href="/android/" class="text-sm text-brand-ink2 hover:text-brand-lime transition-colors">Android</a>
+      <a href="/desktop/" class="text-sm font-semibold text-brand-lime" aria-current="page">Desktop</a>
+      <a href="/panel/" class="text-sm text-brand-ink2 hover:text-brand-lime transition-colors">Panel</a>
+    </div>
+    <p class="text-sm text-brand-ink2/80">© 2026 Streamy · <span class="font-mono text-xs">streamy-app.pages.dev</span></p>
+  </div>
+</footer>
+
+</body>
+</html>
