@@ -17,3 +17,4 @@ app/src/main/cpp/lame/libmp3lame/vector/.deps/
 # tooling artifacts (vendored LAME tarball; extracted copy lives under app/src/main/cpp/lame/)
 /docs/lame-4.0.tar.gz
 /graphify-out/
+streamy-release.jks

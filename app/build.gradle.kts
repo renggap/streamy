@@ -57,6 +57,22 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Release signing creds live in gitignored local.properties:
+            //   streamy.keystore.file / .alias / .password
+            // Unsigned release APKs cannot install (INSTALL_PARSE_FAILED_NO_CERTIFICATES).
+            val lp = Properties()
+            rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { lp.load(it) }
+            val ksFile = rootProject.file(lp.getProperty("streamy.keystore.file", ""))
+            val ksPass = lp.getProperty("streamy.keystore.password", "")
+            if (ksFile.exists() && ksPass.isNotEmpty()) {
+                signingConfigs.create("release") {
+                    storeFile = ksFile
+                    storePassword = ksPass
+                    keyAlias = lp.getProperty("streamy.keystore.alias", "streamy")
+                    keyPassword = ksPass
+                }
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
