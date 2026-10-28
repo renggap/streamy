@@ -21,6 +21,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
@@ -33,6 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -572,6 +574,12 @@ private fun MicVolumeSlider(gain: Float, onChange: (Float) -> Unit) {
             // 0 (mute) – 200 % (+6 dB, hard-clips past 100 %). steps = (range/step) - 1 = 39.
             valueRange = 0f..2f,
             steps = 39,
+            // Keep the 5 % snapping but hide the 39 tick dots — they read as noise on a volume
+            // control, and the % readout above already shows the exact value.
+            colors = SliderDefaults.colors(
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent,
+            ),
             // The range is 0..2, so TalkBack's default "% of range" would read 50 % at unity
             // gain. Announce the same number the screen shows, and name the control.
             modifier = Modifier.semantics {
