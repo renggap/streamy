@@ -33,26 +33,37 @@ class IcecastSourceClient(
     private val mime: String = "audio/mpeg",        // harbor verified with audio/mpeg (MP3)
 ) : SourceClient {
 
-    private var socket: Socket? = null
-    private var out: OutputStream? = null
-    private var metaStream: IcyMetadataStream? = null
+    private val stateLock = Any()
+    @Volatile private var socket: Socket? = null
+    @Volatile private var out: OutputStream? = null
+    @Volatile private var metaStream: IcyMetadataStream? = null
+    // Latched by close(). The socket used to be published only after `200 OK`, so a Stop during
+    // the handshake closed nothing; the handshake then completed into an authenticated source
+    // that held the mount until the server timed it out — and the next Start got "in use".
+    @Volatile private var closed = false
+    // Last now-playing title, seeded into every new ICY stream so a reconnect keeps it.
+    @Volatile private var lastTitle: String = ""
 
     override fun connect(bitrateKbps: Int, name: String, genre: String) {
         try { socket?.close() } catch (_: Throwable) {}
         socket = null; out = null; metaStream = null
-        // Same as UvoxClient: unqualified `port` inside Socket.apply{} binds to Socket.getPort()
-        // (=0, unconnected) instead of the constructor param — connect would hit host:0.
+        // Same as UvoxClient: resolve from the constructor params — inside a Socket.apply{} an
+        // unqualified `port` binds to Socket.getPort() (=0, unconnected) and dials host:0.
         val addr = InetSocketAddress(host, port)
-        val s = Socket().apply {
-            tcpNoDelay = true
-            connect(addr, HANDSHAKE_TIMEOUT_MS)
-            soTimeout = HANDSHAKE_TIMEOUT_MS
+        val s = Socket()
+        synchronized(stateLock) {
+            if (closed) throw IOException("client closed")
+            socket = s   // published before the blocking connect so close() can abort it
         }
         try {
+            s.tcpNoDelay = true
+            s.connect(addr, HANDSHAKE_TIMEOUT_MS)
+            s.soTimeout = HANDSHAKE_TIMEOUT_MS
             val raw = s.getOutputStream()
             // android.util.Base64 (API 1+), NOT java.util.Base64 (API 26+; minSdk is 24).
             // NO_WRAP: without it Android inserts a newline every 76 chars, breaking the header.
-            val auth = Base64.encodeToString("$user:$password".toByteArray(Charsets.US_ASCII), Base64.NO_WRAP)
+            // UTF-8 credentials (RFC 7617 charset=UTF-8; identical bytes for ASCII).
+            val auth = Base64.encodeToString("$user:$password".toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
             // Header values are user-controlled (profile name/mount): strip CR/LF + NUL so a
             // malicious name can't inject extra header lines, and truncate to the wire cap.
             val safeMount = WireSafety.headerValue(mount)
@@ -70,7 +81,9 @@ class IcecastSourceClient(
                 append("icy-metaint: ").append(METAINT).append("\r\n")  // we'll inline StreamTitle blocks
                 append("\r\n")
             }.toString()
-            raw.write(req.toByteArray(Charsets.US_ASCII))
+            // UTF-8: Icecast/harbor store icy-name/genre bytes verbatim and serve them as UTF-8;
+            // US_ASCII turned every non-ASCII character into '?'. ASCII input is byte-identical.
+            raw.write(req.toByteArray(Charsets.UTF_8))
             raw.flush()
 
             val status = readLine(s.getInputStream())
@@ -82,10 +95,12 @@ class IcecastSourceClient(
             }
             s.soTimeout = 0  // streaming: writes own the socket; no read timeout
 
-            val wrapper = IcyMetadataStream(raw, METAINT)
-            socket = s
-            metaStream = wrapper
-            out = wrapper
+            val wrapper = IcyMetadataStream(raw, METAINT).apply { setTitle(lastTitle) }
+            synchronized(stateLock) {
+                if (closed) throw IOException("client closed")
+                metaStream = wrapper
+                out = wrapper
+            }
         } catch (e: Throwable) {
             try { s.close() } catch (_: Throwable) {}
             socket = null; out = null; metaStream = null
@@ -104,24 +119,33 @@ class IcecastSourceClient(
     override fun updateNowPlaying(title: String) {
         // CR/LF stripped so a title can't break out of the StreamTitle='...' block; truncated
         // so the padded block stays far under the 4080-byte ICY metadata limit.
-        val safe = WireSafety.stripControlChars(title).take(WireSafety.MAX_TITLE)
+        val safe = WireSafety.truncate(WireSafety.stripControlChars(title), WireSafety.MAX_TITLE)
+        lastTitle = safe
         metaStream?.setTitle(safe)
         runCatching { adminUpdateMetadata(safe) }  // works on Icecast; harbor 404s — ignored
     }
 
     override fun close() {
-        runCatching { out?.flush() }
-        runCatching { socket?.close() }
+        val s: Socket?
+        val o: OutputStream?
+        synchronized(stateLock) {
+            closed = true
+            s = socket
+            o = out
+        }
+        runCatching { o?.flush() }
+        // Also aborts an in-flight connect()/status read on the transport thread.
+        runCatching { s?.close() }
         socket = null; out = null; metaStream = null
     }
 
     /** Icecast admin metadata update (HTTP GET). Liquidsoap harbor has no admin endpoint — ignore failure. */
     private fun adminUpdateMetadata(title: String) {
-        val q = "mode=updinfo&mount=" + URLEncoder.encode(mount, "UTF-8") +
+        val q = "mode=updinfo&charset=UTF-8&mount=" + URLEncoder.encode(mount, "UTF-8") +
             "&song=" + URLEncoder.encode(title, "UTF-8")
         val conn = (URL("http://$host:$port/admin/metadata?$q").openConnection() as HttpURLConnection).apply {
             connectTimeout = 3_000; readTimeout = 3_000
-            val auth = Base64.encodeToString("$user:$password".toByteArray(Charsets.US_ASCII), Base64.NO_WRAP)
+            val auth = Base64.encodeToString("$user:$password".toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
             setRequestProperty("Authorization", "Basic $auth")
         }
         try {
@@ -185,8 +209,7 @@ class IcecastSourceClient(
                 delegate.write(0)
                 return
             }
-            val raw = ("StreamTitle='" + t.replace("\\", "\\\\").replace("'", "\\'") + "';")
-                .toByteArray(Charsets.US_ASCII)
+            val raw = icyTitleBlock(t)
             val paddedLen = ((raw.size + 15) / 16) * 16
             val block = ByteArray(paddedLen)
             System.arraycopy(raw, 0, block, 0, raw.size)
@@ -200,6 +223,16 @@ class IcecastSourceClient(
 
     companion object {
         private const val HANDSHAKE_TIMEOUT_MS = 6_000
+
+        /**
+         * Pure: the unpadded `StreamTitle='...';` bytes. ICY has no escape syntax — players and
+         * Icecast scan for the closing `';`, and a backslash escape (`\'`) is shown literally.
+         * So only the one sequence that would end the field early (`';`) is defused, using a
+         * typographic apostrophe. UTF-8, the de-facto ICY charset (Icecast is told via the
+         * admin `charset=UTF-8`; harbor/players assume it). Pure → unit tested.
+         */
+        fun icyTitleBlock(title: String): ByteArray =
+            ("StreamTitle='" + title.replace("';", "\u2019;") + "';").toByteArray(Charsets.UTF_8)
         private const val METAINT = 8_192  // bytes of audio between ICY metadata blocks
     }
 }

@@ -15,8 +15,8 @@ object WireSafety {
 
     /**
      * Strip ASCII control characters (CR, LF, NUL, etc.) — header/line injection guard — and
-     * truncate to [max]. Keeps the bytes US-ASCII-safe for the header paths (callers that need
-     * UTF-8 XML, like Ultravox 0x902, use [stripControlChars] instead and keep UTF-8).
+     * truncate to [max] chars (surrogate-safe). Non-ASCII text is kept: callers encode the
+     * result as UTF-8 on the wire, so this is an injection/length guard, not an ASCII filter.
      */
     fun headerValue(value: String, max: Int = MAX_HEADER_VALUE): String =
         truncate(stripControlChars(value), max)

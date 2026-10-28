@@ -25,6 +25,12 @@ class StreamTransport(
      * lockstep (thundering herd).
      */
     private val backoffMs: (attempt: Int) -> Long = { nextBackoffMs(it) },
+    /**
+     * A session must stay up this long before a drop resets the give-up counter. Without it, a
+     * server that accepts the handshake and then immediately drops us (mount kicked, bad codec)
+     * reset `attempt` to 0 every time and looped forever at the 1 s rung.
+     */
+    private val stableSessionMs: Long = STABLE_SESSION_MS,
 ) {
     private val queue = Channel<ByteArray>(CAPACITY)
 
@@ -35,8 +41,15 @@ class StreamTransport(
     @Volatile private var stopped = false
     private var job: Job? = null
 
+    // drops value when the current session went Live: drops while (re)connecting are backlog the
+    // transport throws away anyway (clearBacklog), not frames the listener lost mid-show.
+    @Volatile private var sessionDropBaseline = 0L
+
     /** Total frames dropped since [start] (drop-newest policy). Monotonic; safe to poll. */
     val droppedFrames: Long get() = drops.get()
+
+    /** Frames dropped while Live in the current session (excludes reconnect-window drops). */
+    val sessionDroppedFrames: Long get() = (drops.get() - sessionDropBaseline).coerceAtLeast(0L)
 
     /** Non-blocking enqueue. If the queue is full, DROP THE NEW frame (drop-newest) — keeps
      *  broadcast latency low under downstream backpressure. Counts the drop for metrics.
@@ -69,13 +82,21 @@ class StreamTransport(
     fun start() {
         job = scope.launch {
             var attempt = 0
+            // Once any session went Live, a NAK is most likely transient — e.g. Icecast answers
+            // 403 "Mountpoint in use" after a network blip until it reaps our old source — so it
+            // gets the normal backoff/give-up treatment instead of ending the show.
+            var everLive = false
             while (!stopped) {
+                var liveAtNs = 0L
                 try {
                     onState(if (attempt == 0) TransportState.Connecting else TransportState.Reconnecting(attempt))
                     connect()
+                    if (stopped) break   // stop() raced the handshake; the client's close() owns the socket
                     clearBacklog()
+                    sessionDropBaseline = drops.get()
+                    liveAtNs = System.nanoTime()
+                    everLive = true
                     onState(TransportState.Live)
-                    attempt = 0
                     for (f in queue) {
                         if (stopped) break
                         send(f)
@@ -84,9 +105,12 @@ class StreamTransport(
                     if (stopped) break
                 } catch (e: Throwable) {
                     if (stopped) break
-                    if (isNonRetryable(e)) {
+                    if (isNonRetryable(e) && !everLive) {
                         onState(TransportState.Failed(e.message ?: "auth_failed"))
                         break
+                    }
+                    if (liveAtNs != 0L && (System.nanoTime() - liveAtNs) / 1_000_000L >= stableSessionMs) {
+                        attempt = 0   // a real session ended: start the ladder over
                     }
                     attempt++
                     if (shouldGiveUp(attempt)) {
@@ -119,9 +143,11 @@ class StreamTransport(
 
     companion object {
         const val CAPACITY = 64
+        const val STABLE_SESSION_MS = 10_000L
         fun shouldGiveUp(attempt: Int) = attempt >= 10
 
-        /** Auth/handshake rejections are permanent — retrying hammers the server and delays feedback. */
+        /** Auth/handshake rejections on the FIRST connect are permanent — retrying hammers the
+         *  server and delays feedback. (After a Live session they are retried; see [start].) */
         fun isNonRetryable(e: Throwable): Boolean = e is ProtocolException
 
         /**

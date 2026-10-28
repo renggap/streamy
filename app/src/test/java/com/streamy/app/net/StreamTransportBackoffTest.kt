@@ -189,6 +189,59 @@ class StreamTransportBackoffTest {
         ownScope.cancel()
     }
 
+    @Test fun protocol_exception_after_a_live_session_is_retried_not_fatal() {
+        // After a network blip Icecast NAKs "mountpoint in use" until it reaps the old source;
+        // that must back off and retry, not end the show on the first NAK.
+        val ownScope = CoroutineScope(Job() + Dispatchers.Default)
+        val observed = java.util.Collections.synchronizedList(mutableListOf<TransportState>())
+        val connects = java.util.concurrent.atomic.AtomicInteger(0)
+        lateinit var t: StreamTransport
+        t = StreamTransport(
+            scope = ownScope,
+            connect = {
+                if (connects.incrementAndGet() > 1) throw ProtocolException("icecast source rejected: HTTP/1.0 403 Mountpoint in use")
+            },
+            send = { throw java.io.IOException("connection reset (test)") },
+            onState = { s ->
+                observed.add(s)
+                if (s is TransportState.Live) t.enqueue(ByteArray(1))   // first send drops the session
+            },
+            backoffMs = { 1L },
+        )
+        t.start()
+        waitUntil(cond = { observed.any { it is TransportState.Failed } })
+        t.stop()
+        assertThat(connects.get()).isGreaterThan(2)
+        val failed = observed.last() as TransportState.Failed
+        assertThat(failed.reason).startsWith("gave_up")
+        ownScope.cancel()
+    }
+
+    @Test fun session_that_drops_immediately_still_counts_toward_give_up() {
+        // Handshake succeeds, first send fails, forever. attempt used to reset to 0 on every
+        // successful connect, so this looped at the 1 s rung indefinitely.
+        val ownScope = CoroutineScope(Job() + Dispatchers.Default)
+        val observed = java.util.Collections.synchronizedList(mutableListOf<TransportState>())
+        val connects = java.util.concurrent.atomic.AtomicInteger(0)
+        lateinit var t: StreamTransport
+        t = StreamTransport(
+            scope = ownScope,
+            connect = { connects.incrementAndGet() },
+            send = { throw java.io.IOException("kicked (test)") },
+            onState = { s ->
+                observed.add(s)
+                if (s is TransportState.Live) t.enqueue(ByteArray(1))
+            },
+            backoffMs = { 1L },
+        )
+        t.start()
+        waitUntil(cond = { observed.any { it is TransportState.Failed } })
+        t.stop()
+        assertThat(connects.get()).isEqualTo(10)
+        assertThat((observed.last() as TransportState.Failed).reason).startsWith("gave_up")
+        ownScope.cancel()
+    }
+
     // ---- Test harness: a real transport on a tiny injected delay ladder ----
 
     /** [sleepLog] records every ms value actually passed to delay(); [reportedLog] records every

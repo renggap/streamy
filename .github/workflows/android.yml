@@ -1,0 +1,145 @@
+name: Android
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Must match app/build.gradle.kts (ndkVersion, externalNativeBuild.cmake.version).
+  NDK_VERSION: "27.0.12077973"
+  CMAKE_VERSION: "3.22.1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The runner image ships an SDK at $ANDROID_HOME but not necessarily the exact NDK/CMake
+      # pinned by the build; installing them up front avoids AGP's slower implicit download.
+      - name: Install NDK + CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}" > /dev/null
+
+      # No local.properties in CI: live/instrumented tests skip (env-gated), debug TEST_* fields
+      # fall back to empty defaults.
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest
+
+      - name: Lint
+        run: ./gradlew :app:lintDebug
+
+      - name: Assemble debug
+        run: ./gradlew :app:assembleDebug
+
+      # Play rejects (and 16 KB-page devices fail to load) native libs not aligned to 16 KB.
+      - name: Check 16 KB page alignment
+        run: |
+          ZIPALIGN=$(ls "$ANDROID_HOME"/build-tools/*/zipalign | sort -V | tail -1)
+          "$ZIPALIGN" -c -P 16 -v 4 app/build/outputs/apk/debug/app-debug.apk | grep -E 'lib/.*\.so|Verification'
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamy-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload test + lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore
+
+  release:
+    # Signed release only where secrets exist (never on fork PRs).
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      KEYSTORE_BASE64: ${{ secrets.STREAMY_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install NDK + CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}" > /dev/null
+
+      # build.gradle.kts reads signing config from local.properties; recreate it from secrets.
+      - name: Configure signing
+        if: env.KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.STREAMY_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.STREAMY_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.STREAMY_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/streamy-release.jks"
+          {
+            echo "streamy.keystore.file=$RUNNER_TEMP/streamy-release.jks"
+            echo "streamy.keystore.password=$KEYSTORE_PASSWORD"
+            echo "streamy.keystore.alias=${KEY_ALIAS:-streamy}"
+            [ -n "$KEY_PASSWORD" ] && echo "streamy.keystore.keyPassword=$KEY_PASSWORD"
+          } > local.properties
+
+      - name: Skip (no signing secrets)
+        if: env.KEYSTORE_BASE64 == ''
+        run: echo "::notice::STREAMY_KEYSTORE_BASE64 not set — skipping signed release build."
+
+      - name: Assemble release
+        if: env.KEYSTORE_BASE64 != ''
+        run: ./gradlew :app:assembleRelease
+
+      - name: Upload release APK
+        if: env.KEYSTORE_BASE64 != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamy-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: env.KEYSTORE_BASE64 != '' && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/*.apk
+          generate_release_notes: true
+
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/streamy-release.jks" local.properties

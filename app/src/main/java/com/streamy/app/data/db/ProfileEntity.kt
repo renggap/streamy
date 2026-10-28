@@ -10,6 +10,8 @@ data class ProfileEntity(
     val host: String,
     val port: Int,
     val sid: Int,                 // SHOUTcast v2 stream id; 1 default
+    // ponytail: source/admin passwords sit in plaintext in the app-private DB (backup is disabled,
+    // see data_extraction_rules). Wrap with an Android Keystore AES key if the threat model grows.
     val password: String,
     val mount: String,            // used by ICY fallback, e.g. "/stream"
     val codec: String,            // "AAC" | "MP3"

@@ -84,6 +84,10 @@ class StreamService : Service() {
     val recordingPath: StateFlow<String?> = _recordingPath.asStateFlow()
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+    // Latched when the armed recording hit a write/encode failure (disk full etc.) and was
+    // dropped mid-show; cleared on the next arm. The stream itself keeps going.
+    private val _recordingFailed = MutableStateFlow(false)
+    val recordingFailed: StateFlow<Boolean> = _recordingFailed.asStateFlow()
 
     private val db by lazy { DatabaseHolder.get(this) }
 
@@ -92,12 +96,6 @@ class StreamService : Service() {
     private var client: SourceClient? = null
     private var encoder: Encoder? = null
     private var profileName: String? = null
-
-    // Drop-newest counter snapshot at the moment the transport went Live. The transport's own
-    // counter resets on each connect, so Live.droppedFrames = current - baseline gives the
-    // drops that happened during THIS live session (the transport emits Backpressure states
-    // inline from the audio thread; we fold them into the next Live emission below).
-    @Volatile private var liveDropBaseline = 0L
 
     // Last time a Backpressure drop-count made it to the UI (throttled; see toStreamState).
     @Volatile private var lastDropUiEmitMs = 0L
@@ -129,11 +127,12 @@ class StreamService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == null) {
-            // System restart after process kill: no profile id to resume from.
-            // Re-promote briefly so we don't miss the FGS timeout, then stop.
-            startForegroundTyped(buildNotification("Idle"))
-            stopAndShutdown()
-            return START_STICKY
+            // Defensive only: START_NOT_STICKY means the system never restarts us with a null
+            // intent. A stream can't resume after a process kill anyway (no socket, no session),
+            // and a sticky restart is NOT an FGS start — promoting here could throw on 31+/34+
+            // (background start / revoked mic) and crash-loop. Just go away.
+            stopSelf()
+            return START_NOT_STICKY
         }
         when (intent?.action) {
             ACTION_START -> {
@@ -141,13 +140,13 @@ class StreamService : Service() {
                 startForegroundTyped(buildNotification("Connecting…"))
                 val id = intent.getLongExtra(EXTRA_PROFILE_ID, -1L)
                 if (id < 0L) {
-                    _state.value = StreamState.Error("profile_missing")
-                    stopAndShutdown()
+                    synchronized(this) { shuttingDown = false }   // fresh start: let fail() tear down
+                    fail("profile_missing")
                 } else {
                     startWithProfile(id, intent.getStringExtra(EXTRA_DEVICE_NAME))
                 }
             }
-            ACTION_STOP -> stopAndShutdown()
+            ACTION_STOP -> acknowledgeStop()
             ACTION_META -> {
                 val title = intent.getStringExtra(EXTRA_TITLE)
                 if (title != null) {
@@ -159,7 +158,7 @@ class StreamService : Service() {
             ACTION_RECORD_ON -> startRecording()
             ACTION_RECORD_OFF -> stopRecording()
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun startWithProfile(profileId: Long, deviceName: String?) {
@@ -170,8 +169,7 @@ class StreamService : Service() {
             try {
                 val profile = db.profileDao().byId(profileId)
                 if (profile == null) {
-                    _state.value = StreamState.Error("profile_missing")
-                    stopAndShutdown()
+                    fail("profile_missing")
                     return@launch
                 }
                 profileName = profile.name
@@ -251,13 +249,17 @@ class StreamService : Service() {
                             // connect() and about to emit Connecting/Live. Once shuttingDown is
                             // latched, transport state must not overwrite the Error the user saw.
                             if (shuttingDown) return@StreamTransport
+                            if (ts is TransportState.Failed) {
+                                // Terminal: release the mic, locks and FGS too — not just show
+                                // Error while everything stays held. Off the transport coroutine
+                                // (teardown stops this very transport).
+                                scope.launch { fail(ts.reason) }
+                                return@StreamTransport
+                            }
                             ts.toStreamState()?.let { s -> _state.value = s }
                         },
                     )
                     transport = t
-                    // Baseline the drop counter before the transport starts so Live.droppedFrames
-                    // counts drops of THIS session only.
-                    liveDropBaseline = t.droppedFrames
                     val p = AudioPipeline(
                         capture = AudioCapture(
                             sampleRateHz = cfg.sampleRateHz,
@@ -267,11 +269,16 @@ class StreamService : Service() {
                         ),
                         encoder = enc,
                         transport = t,
-                        onMicBusy = {
-                            _state.value = StreamState.Error("mic_busy")
-                            stopAndShutdown(preserveTerminal = true)
-                        },
+                        onMicBusy = { fail("mic_busy") },
                         levelFeed = levelFeed,
+                        onFatal = { e ->
+                            Log.e(TAG, "audio pipeline failed", e)
+                            scope.launch { fail("audio_failed") }
+                        },
+                        onSinkError = {
+                            _isRecording.value = false
+                            _recordingFailed.value = true
+                        },
                     )
                     pipeline = p
                     acquireLocks()
@@ -280,8 +287,7 @@ class StreamService : Service() {
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "start failed", e)
-                _state.value = StreamState.Error(e.message ?: "start_failed")
-                stopAndShutdown(preserveTerminal = true)
+                fail(e.message ?: "start_failed")
             }
         }
     }
@@ -303,23 +309,34 @@ class StreamService : Service() {
         if (liveCfg == null) return
         if (_isRecording.value) return          // already armed — ignore double ACTION_RECORD_ON
         _isRecording.value = true
+        _recordingFailed.value = false
         val cfg = liveCfg ?: run { _isRecording.value = false; return }
         scope.launch(Dispatchers.IO) {
+            var path: String? = null
             val built: StreamSink? = try {
                 val name = "streamy-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}-${System.currentTimeMillis() % 1000}.mp3"
                 val target = RecordingStorage.open(this@StreamService, name)
                 if (target == null) null else {
+                    path = target.displayPath
                     // MP3 stream → write frames as-is (zero re-encode). AAC stream → transcode via LAME.
-                    val sink: StreamSink = if (cfg.codec == Codec.MP3)
-                        Mp3DirectSink(target.stream)
-                    else Mp3TranscodeSink(target.stream, cfg.sampleRateHz, cfg.mono)
-                    _recordingPath.value = target.displayPath
-                    sink
+                    try {
+                        if (cfg.codec == Codec.MP3) Mp3DirectSink(target.stream)
+                        else Mp3TranscodeSink(target.stream, cfg.sampleRateHz, cfg.mono)
+                    } catch (e: Throwable) {
+                        // LAME init failed: close the stream so the fd and the pending
+                        // MediaStore stub (deleted when nothing was written) don't leak.
+                        runCatching { target.stream.close() }
+                        throw e
+                    }
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "record file open failed", e); null
             }
-            if (built == null) { _isRecording.value = false; return@launch }
+            if (built == null) {
+                _isRecording.value = false
+                _recordingFailed.value = true
+                return@launch
+            }
             // Arm under the service monitor so a teardown that nulled the pipeline can't leave the
             // sink orphaned; close the just-built sink on bail (fd + native LAME).
             synchronized(this@StreamService) {
@@ -328,14 +345,21 @@ class StreamService : Service() {
                     _isRecording.value = false
                 } else {
                     pipeline?.armRecord(built)
+                    // Only now: a bailed arm must not leave the UI pointing at a deleted file.
+                    _recordingPath.value = path
                 }
             }
         }
     }
 
     private fun stopRecording() {
-        _isRecording.value = false
-        pipeline?.disarmRecord()
+        // Under the service monitor, like the arm in startRecording: otherwise a disarm landing
+        // between that block's `_isRecording` check and armRecord() is lost and the recording
+        // keeps running while the UI says it stopped.
+        synchronized(this) {
+            _isRecording.value = false
+            pipeline?.disarmRecord()
+        }
     }
 
     /** Resolve a previously-selected input device by productName (ids are not stable across reboots). */
@@ -357,7 +381,7 @@ class StreamService : Service() {
         TransportState.Live -> {
             updateNotification("Live: ${profileName.orEmpty()}")
             val t = transport
-            StreamState.Live(droppedFrames = ((t?.droppedFrames ?: 0L) - liveDropBaseline).coerceAtLeast(0L))
+            StreamState.Live(droppedFrames = t?.sessionDroppedFrames ?: 0L)
         }
         is TransportState.Reconnecting -> StreamState.Reconnecting(attempt)
         is TransportState.Backoff ->
@@ -367,7 +391,7 @@ class StreamService : Service() {
             val now = System.currentTimeMillis()
             if (current is StreamState.Live && now - lastDropUiEmitMs >= DROP_UI_THROTTLE_MS) {
                 val t = transport
-                val total = ((t?.droppedFrames ?: 0L) - liveDropBaseline).coerceAtLeast(0L)
+                val total = t?.sessionDroppedFrames ?: 0L
                 if (total != current.droppedFrames) {
                     lastDropUiEmitMs = now
                     _state.value = StreamState.Live(droppedFrames = total)
@@ -375,7 +399,7 @@ class StreamService : Service() {
             }
             null
         }
-        is TransportState.Failed -> StreamState.Error(reason)
+        is TransportState.Failed -> StreamState.Error(reason)   // normally routed via fail()
     }
 
     private fun acquireLocks() {
@@ -406,6 +430,34 @@ class StreamService : Service() {
         wifiLock = null
     }
 
+    /**
+     * Terminal failure: surface [reason] as Error and tear down, keeping the Error visible.
+     * No-op once a teardown already ran — a late failure (e.g. encode-after-close while the user
+     * is stopping) must not overwrite the Idle/Error the user already saw.
+     */
+    @Synchronized
+    private fun fail(reason: String) {
+        if (shuttingDown) return
+        _state.value = StreamState.Error(reason)
+        stopAndShutdown(preserveTerminal = true)
+    }
+
+    /**
+     * User STOP. After a terminal error the session is already torn down (shuttingDown latched,
+     * Error preserved for the UI) and the service lingers only because the Activity is bound;
+     * STOP then means "acknowledged" → back to Idle so Start is reachable again. Before this,
+     * STOP in Error was swallowed by the idempotency latch and the UI stayed stuck on Error.
+     */
+    @Synchronized
+    private fun acknowledgeStop() {
+        if (shuttingDown) {
+            _state.value = StreamState.Idle
+            stopSelf()
+        } else {
+            stopAndShutdown()
+        }
+    }
+
     /** Single idempotent teardown path. Safe to call from any thread. */
     @Synchronized
     fun stopAndShutdown(preserveTerminal: Boolean = false) {
@@ -422,6 +474,9 @@ class StreamService : Service() {
         } catch (e: Throwable) {
             Log.e(TAG, "stopForeground", e)
         }
+        // A Live emission racing this teardown may have re-posted the ongoing notification via
+        // updateNotification() after stopForeground removed it; make sure nothing lingers.
+        runCatching { (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(NOTIF_ID) }
         stopSelf()
     }
 
@@ -460,6 +515,7 @@ class StreamService : Service() {
     }
 
     private fun updateNotification(text: String) {
+        if (shuttingDown) return
         try {
             val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             nm.notify(NOTIF_ID, buildNotification(text))

@@ -3,6 +3,7 @@ package com.streamy.app.audio
 import java.io.BufferedOutputStream
 import java.io.OutputStream
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -24,15 +25,19 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Output is wrapped in a [BufferedOutputStream] so per-frame writes don't hit the kernel on
  * the transcode thread.
  *
- * Lifecycle is owned by [AudioPipeline]: flush()/close() are called either on the audio thread
- * (disarmRecord path) or after the audio thread has exited (stop path). The transcode thread is
- * joined inside flush()/close() so the single-accessor rule still holds for the encoder handle.
+ * Lifecycle is owned by [AudioPipeline]: once a sink is detached from the audio thread it is
+ * flushed + closed exactly once, on a background "retire" thread or after the audio thread exited.
+ *
+ * [failed] latches on the first write/encode failure (disk full, revoked storage, LAME error) so
+ * the pipeline can drop the sink and tell the user instead of silently truncating the recording.
  */
 interface StreamSink : AutoCloseable {
     /** PCM pre-encode (transcode path). Default no-op. */
     fun onPcm(pcm: ShortArray) {}
     /** Already-encoded frames (pass-through path). Default no-op. */
     fun onEncoded(frames: List<ByteArray>) {}
+    /** True once a write/encode failed; the recording is broken from that point on. */
+    val failed: Boolean get() = false
     fun flush()
     override fun close()
 }
@@ -40,8 +45,15 @@ interface StreamSink : AutoCloseable {
 /** Pass-through: the live stream is MP3, so write encoded MP3 frames as-is. */
 class Mp3DirectSink(out: OutputStream) : StreamSink {
     private val out = BufferedOutputStream(out, BUF)
+    @Volatile private var broken = false
+    override val failed: Boolean get() = broken
     override fun onEncoded(frames: List<ByteArray>) {
-        for (f in frames) runCatching { out.write(f) }
+        if (broken) return
+        try {
+            for (f in frames) out.write(f)
+        } catch (e: java.io.IOException) {
+            broken = true
+        }
     }
     override fun flush() { runCatching { out.flush() } }
     override fun close() {
@@ -69,14 +81,15 @@ class Mp3TranscodeSink(
     private val out = BufferedOutputStream(out, BUF)
 
     // Bounded pipe so a burst of PCM can't balloon memory; drop-newest on overflow (recording
-    // a gap is acceptable — the live stream is the product). Empty array = flush end-marker:
-    // ArrayBlockingQueue forbids null, and a 0-length ShortArray is never a real PCM frame
-    // (the pipeline sends >= 1024 samples), so it's a safe sentinel the run-loop can detect.
+    // a gap is acceptable — the live stream is the product). The end marker is matched by
+    // IDENTITY: an empty PCM frame from elsewhere must never be mistaken for end-of-stream.
     private val queue = ArrayBlockingQueue<ShortArray>(QUEUE_CAPACITY)
 
     // Written on the audio thread (enqueue path), read by the transcode thread.
     private val droppedFrames = java.util.concurrent.atomic.AtomicLong(0)
     private val closed = AtomicBoolean(false)
+    @Volatile private var broken = false
+    override val failed: Boolean get() = broken
 
     private val encoder = encoderFactory()
     private val transcodeThread = Thread(::runLoop, "streamy-transcode").apply { isDaemon = true; start() }
@@ -89,18 +102,31 @@ class Mp3TranscodeSink(
         if (!queue.offer(pcm)) droppedFrames.incrementAndGet()   // drop-newest (bounded latency)
     }
 
-    /** Called on the audio thread after capture stops (or on stop path). Joins the transcode thread. */
+    /**
+     * Hands the transcode thread the end marker and joins it, so encoder.flush()'s tail hits disk.
+     * Called off the audio thread (retire / post-capture stop), so it may block briefly.
+     */
     override fun flush() {
-        // Hand the thread the end marker (empty array — ABQ forbids null), then join. The
-        // thread exits after the last frame and drains encoder.flush(); every byte hits disk.
         if (!closed.compareAndSet(false, true)) return
-        runCatching { queue.offer(END_MARKER) }
-        runCatching { transcodeThread.join(FLUSH_JOIN_MS) }
+        // The queue is full exactly when the transcode thread is behind; a plain offer() would
+        // then lose the marker and leave the thread parked forever. Wait for a slot, and only if
+        // the thread is wedged give up the backlog so the marker still gets through.
+        if (transcodeThread.isAlive) {
+            val queued = runCatching { queue.offer(END_MARKER, FLUSH_JOIN_MS, TimeUnit.MILLISECONDS) }.getOrDefault(false)
+            if (!queued) {
+                queue.clear()
+                queue.offer(END_MARKER)
+            }
+            runCatching { transcodeThread.join(FLUSH_JOIN_MS) }
+        }
         runCatching { out.flush() }
     }
 
     override fun close() {
         runCatching { flush() }
+        // If the thread is still alive it is wedged inside encode(); Mp3Encoder's methods are
+        // synchronized and close-checked, so this close waits for that encode to return and the
+        // thread's next call fails cleanly (caught in runLoop) instead of touching a freed handle.
         runCatching { encoder.close() }
         runCatching { out.close() }
     }
@@ -109,13 +135,14 @@ class Mp3TranscodeSink(
         try {
             while (true) {
                 val frame = queue.take()
-                if (frame.isEmpty()) break               // flush end-marker
+                if (frame === END_MARKER) break          // flush end-marker (identity, not size)
                 for (f in encoder.encode(frame)) out.write(f)
             }
             for (f in encoder.flush()) out.write(f)
         } catch (e: Throwable) {
             // I/O error or encoder death: stop writing, drain the queue so flush()'s join
             // terminates promptly. The recording is already broken; don't wedge the audio path.
+            broken = true
             queue.clear()
         }
     }
@@ -127,7 +154,7 @@ class Mp3TranscodeSink(
         private const val FLUSH_JOIN_MS = 1_000L
         // File is always a clean 128 kbps MP3 — independent of the (possibly low) live bitrate.
         private const val FILE_BITRATE_KBPS = 128
-        /** Empty array = end-of-stream sentinel (ArrayBlockingQueue forbids null). */
+        /** End-of-stream sentinel (ArrayBlockingQueue forbids null); compared by identity. */
         private val END_MARKER = ShortArray(0)
     }
 }

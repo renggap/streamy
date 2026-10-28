@@ -4,8 +4,11 @@ import android.app.Application
 import android.content.Context
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.os.SystemClock
+import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.streamy.app.R
 import com.streamy.app.audio.LevelSnapshot
 import com.streamy.app.data.AudioConfig
 import com.streamy.app.data.AudioConfigRules
@@ -45,7 +48,8 @@ import kotlinx.coroutines.launch
  * The bound [StreamService.state] / levels / recording flags are pushed in from
  * [MainActivity]'s ServiceConnection via the on*() mirrors — the VM never owns the binding.
  *
- * ponytail: persist selectedProfileId across process death (DataStore). Out of scope 12b.
+ * User-facing copy leaves the VM as [UiText] (resource id + args), never as resolved
+ * strings: the VM survives configuration changes, the locale may not.
  */
 class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -92,9 +96,14 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     // Standalone recorder (RecordService) — independent of the stream. Idle = not running.
     private val _recordState = MutableStateFlow<RecordState>(RecordState.Idle)
     val recordState: StateFlow<RecordState> = _recordState.asStateFlow()
-    val isRecorderActive: StateFlow<Boolean> =
-        _recordState.map { it !is RecordState.Idle }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /**
+     * Most recently *started* file from either recording path (stream tap or standalone
+     * recorder). RecordState drops its path on Idle and StreamService's path is "last/active",
+     * so neither alone can answer "where did my last recording go?" once both have been used.
+     */
+    private val _lastSavedPath = MutableStateFlow<String?>(null)
+    val lastSavedPath: StateFlow<String?> = _lastSavedPath.asStateFlow()
 
     /**
      * Snapshot of the selected profile captured at the moment [start] was last invoked.
@@ -103,6 +112,39 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
      * to drive [needsRestartToApply].
      */
     private val _startSnapshot = MutableStateFlow<ProfileEntity?>(null)
+
+    /**
+     * Id of the profile the current/last stream was started with. Persisted (not just the
+     * in-memory [_startSnapshot]) because the Activity — and this VM — can be destroyed while
+     * StreamService keeps broadcasting; a fresh VM must still know which profile is on air
+     * to lock it and to route Now-playing.
+     */
+    private val _streamProfileId = MutableStateFlow(
+        uiPrefs.getLong(KEY_STREAM_PROFILE, -1L).takeIf { it >= 0L }
+    )
+
+    /**
+     * The profile the running stream belongs to — null unless Connecting / Live /
+     * Reconnecting. Keys the on-air banner, Now-playing and the U-5 locks on what is actually
+     * broadcasting, not on whatever row is selected.
+     */
+    val streamProfile: StateFlow<ProfileEntity?> = combine(
+        _streamState, _streamProfileId, profiles, _startSnapshot,
+    ) { state, id, list, snap ->
+        if (!state.isActive || id == null) null
+        else list.firstOrNull { it.id == id } ?: snap?.takeIf { it.id == id }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Keep-screen-on while Live (Settings toggle). Default off: it costs battery. */
+    private val _keepScreenOn = MutableStateFlow(uiPrefs.getBoolean(KEY_KEEP_SCREEN_ON, false))
+    val keepScreenOn: StateFlow<Boolean> = _keepScreenOn.asStateFlow()
+
+    // Double-tap guards: START intents are async, so the UI keeps showing Start until the
+    // service reports a new state. A second tap inside that window would send a second START.
+    // Time-boxed rather than a plain flag so a start the service silently drops can't wedge
+    // the button forever.
+    private var streamStartGuardUntil = 0L
+    private var recorderStartGuardUntil = 0L
 
     // ---- Mic settings (gain + device) ----
 
@@ -162,18 +204,14 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
      * this hint is enough; user stops + starts to apply.
      */
     val needsRestartToApply: StateFlow<Boolean> = combine(
-        streamState, selectedProfile, _startSnapshot, selectedDeviceName, _startDeviceName,
-    ) { state, profile, snapshot, dev, startDev ->
-        state is StreamState.Live &&
-            snapshot != null &&
-            profile != null &&
-            snapshot.id == profile.id && (
-                snapshot.codec != profile.codec ||
-                    snapshot.bitrateKbps != profile.bitrateKbps ||
-                    snapshot.sampleRateHz != profile.sampleRateHz ||
-                    snapshot.mono != profile.mono ||
-                    dev != startDev
-            )
+        streamState, profiles, _startSnapshot, selectedDeviceName, _startDeviceName,
+    ) { state, list, snapshot, dev, startDev ->
+        // Compare against the on-air profile's CURRENT row (not the selection): while Live the
+        // profile can still be edited (server fields included — the handshake already used the
+        // old ones), and any persisted change only applies on the next start.
+        val current = snapshot?.let { s -> list.firstOrNull { it.id == s.id } }
+        state is StreamState.Live && snapshot != null && current != null &&
+            (current != snapshot || dev != startDev)
     }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
@@ -200,9 +238,13 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Transient UI signals ----
 
-    private val _userMessage = MutableStateFlow<String?>(null)
-    /** Humanized one-liner surfaced as a snackbar; null = nothing to show. */
-    val userMessage: StateFlow<String?> = _userMessage.asStateFlow()
+    private val _userMessage = MutableStateFlow<UserMessage?>(null)
+    /** Localizable one-liner surfaced as a snackbar; null = nothing to show. */
+    val userMessage: StateFlow<UserMessage?> = _userMessage.asStateFlow()
+
+    private fun message(@StringRes id: Int, vararg args: Any) {
+        _userMessage.value = UserMessage(UiText.Res(id, args.toList()))
+    }
 
     private val _permissionsNeeded = MutableStateFlow<List<String>>(emptyList())
     /** Non-empty → MainActivity should request these and call [onPermissionsResult]. */
@@ -216,8 +258,40 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Selection ----
 
-    fun selectProfile(id: Long?) {
+    /**
+     * Select a profile. Refused (with a message) while a stream is on air with a different
+     * profile: Home's chooser, needsRestart and the summary all follow the selection, so
+     * swapping it mid-broadcast would describe a stream that isn't running.
+     * Returns true when the selection was applied.
+     */
+    fun selectProfile(id: Long?): Boolean {
+        val live = liveProfileId()
+        if (live != null && id != live) {
+            message(R.string.msg_stop_before_switch)
+            return false
+        }
         _selectedProfileId.value = id
+        return true
+    }
+
+    /** Profile currently owned by a running stream, or null when nothing is on air. */
+    private fun liveProfileId(): Long? =
+        if (_streamState.value.isActive) _streamProfileId.value else null
+
+    /**
+     * True (and a message is posted) when [id] is the on-air profile and must not be deleted.
+     * Screens call this before opening their delete confirmation, so the user gets the reason
+     * immediately instead of confirming a delete that is then refused.
+     */
+    fun isLockedByStream(id: Long): Boolean {
+        if (id != liveProfileId()) return false
+        message(R.string.msg_profile_on_air_locked)
+        return true
+    }
+
+    fun setKeepScreenOn(on: Boolean) {
+        _keepScreenOn.value = on
+        uiPrefs.edit().putBoolean(KEY_KEEP_SCREEN_ON, on).apply()
     }
 
     // ---- Mic settings ----
@@ -239,6 +313,8 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             val list = am.getDevices(AudioManager.GET_DEVICES_INPUTS)
                 .filter { it.isSource && it.type in ALLOWED_INPUT_TYPES }
+                // "(unnamed)" is a matching KEY (round-trips to StreamService), not display copy —
+                // it must stay locale-independent. The label is what the dropdown shows.
                 .map { MicDevice(it.productName?.toString().orEmpty().ifEmpty { "(unnamed)" }, labelFor(it), it.type) }
                 .distinctBy { it.name }
             _inputDevices.value = list
@@ -251,6 +327,9 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     // Updates persist via repo.update so the next start() picks them up.
 
     fun setCodec(c: Codec) {
+        // AAC is UI-disabled (AGENTS.md: DNAS quirks, re-verify against a real DNAS2 first).
+        // Refuse it here too so no caller can re-enable it by accident; the encoder path stays.
+        if (c == Codec.AAC) return
         val p = selectedProfile.value ?: return
         // Icecast mounts don't accept AAC — coerce to MP3 so the persisted row stays playable.
         val protocol = DjProtocol.parse(p.djProtocol)
@@ -267,11 +346,11 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setBitrate(kbps: Int) {
         val p = selectedProfile.value ?: return
-        // Out-of-ladder values are rejected (defensive: the chooser only offers ladder values);
-        // a stray call with no profile is a no-op, never a crash from a UI event.
+        // Out-of-ladder values are ignored (defensive: the chooser only offers ladder values);
+        // this runs from a UI event, so it must never throw — a stray value is a no-op.
         val ladder = if (p.codecEnum() == Codec.AAC) AudioConfigRules.AAC_BITRATES
                      else AudioConfigRules.MP3_BITRATES
-        require(kbps in ladder) { "bitrate $kbps not in ladder $ladder" }
+        if (kbps !in ladder) return
         val newMono = if (AudioConfigRules.needsHeAac(p.codecEnum(), kbps)) true else p.mono
         val newSr = AudioConfigRules.clamp(AudioConfig(p.codecEnum(), kbps, p.sampleRateHz, newMono)).sampleRateHz
         updateProfileAudio(p.copy(bitrateKbps = kbps, mono = newMono, sampleRateHz = newSr))
@@ -297,30 +376,50 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Profile CRUD ----
 
-    /** Insert (id == 0) or update; selects the saved profile and surfaces a confirmation. */
-    fun saveProfile(p: ProfileEntity, onSelect: (Long) -> Unit = {}) {
+    /**
+     * Insert (id == 0) or update, then surface a confirmation. Selects the saved profile —
+     * except while a stream is on air, where the selection is pinned to the live profile
+     * (see [selectProfile]); the message then says what happens instead.
+     */
+    fun saveProfile(p: ProfileEntity, onSaved: (Long) -> Unit = {}) {
         viewModelScope.launch {
             val id = if (p.id == 0L) repo.save(p) else { repo.update(p); p.id }
-            _selectedProfileId.value = id
-            onSelect(id)
-            _userMessage.value = "Saved ${p.name}"
+            val live = liveProfileId()
+            when {
+                live == null -> {
+                    _selectedProfileId.value = id
+                    message(R.string.msg_saved, p.name)
+                }
+                live == id -> message(R.string.msg_saved_restart_to_apply, p.name)
+                else -> message(R.string.msg_saved_not_selected, p.name)
+            }
+            onSaved(id)
         }
     }
 
-    fun deleteProfile(p: ProfileEntity) {
+    /** Delete [p]. Refused while it is the on-air profile. Returns true when deletion started. */
+    fun deleteProfile(p: ProfileEntity): Boolean {
+        if (isLockedByStream(p.id)) return false
         viewModelScope.launch {
             repo.delete(p)
             if (_selectedProfileId.value == p.id) _selectedProfileId.value = null
-            _userMessage.value = "Deleted ${p.name}"
+            message(R.string.msg_deleted, p.name)
         }
+        return true
     }
 
     fun clearAllProfiles() {
+        // Clearing would delete the on-air profile out from under the stream.
+        if (_streamState.value.isActive) {
+            message(R.string.msg_stop_before_clear)
+            return
+        }
         viewModelScope.launch {
             val all = profiles.value
             all.forEach { repo.delete(it) }
             _selectedProfileId.value = null
-            _userMessage.value = if (all.isEmpty()) "No profiles to clear" else "Cleared ${all.size} profile${if (all.size == 1) "" else "s"}"
+            _userMessage.value = if (all.isEmpty()) UserMessage(UiText.Res(R.string.msg_no_profiles_to_clear))
+            else UserMessage(UiText.Plural(R.plurals.msg_cleared_profiles, all.size, listOf(all.size)))
         }
     }
 
@@ -330,24 +429,50 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Lifecycle: start / stop / record ----
 
-    fun start() {
-        val ctx = getApplication<Application>()
-        val profileId = _selectedProfileId.value
-        if (profileId == null) {
-            _userMessage.value = "No profile selected"
+    fun start() = startStream(_selectedProfileId.value)
+
+    /**
+     * Retry from Error with the profile that failed (not whatever is selected now — the
+     * selection is only pinned while on air, and Error is not on air). Re-selects it so Home
+     * describes the stream that is about to start.
+     */
+    fun retry() {
+        val id = _streamProfileId.value ?: _selectedProfileId.value
+        if (id != null && profiles.value.isNotEmpty() && profiles.value.none { it.id == id }) {
+            message(R.string.msg_profile_gone)
             return
         }
+        if (id != null) _selectedProfileId.value = id
+        startStream(id)
+    }
+
+    private fun startStream(profileId: Long?) {
+        val ctx = getApplication<Application>()
+        if (profileId == null) {
+            message(R.string.msg_no_profile_selected)
+            return
+        }
+        if (SystemClock.elapsedRealtime() < streamStartGuardUntil) return
         val needed = missingPermissions(ctx)
         if (needed.isNotEmpty()) {
             pendingStartProfileId = profileId
+            pendingStartIsRecorder = false
             _permissionsNeeded.value = needed
             return
         }
+        launchStream(profileId)
+    }
+
+    private fun launchStream(profileId: Long) {
         // Capture the profile + mic-device snapshot the stream is being started against, so we
         // can detect later divergence while Live.
-        _startSnapshot.value = selectedProfile.value
+        _startSnapshot.value = profiles.value.firstOrNull { it.id == profileId }
+            ?: selectedProfile.value?.takeIf { it.id == profileId }
+        _streamProfileId.value = profileId
+        uiPrefs.edit().putLong(KEY_STREAM_PROFILE, profileId).apply()
         _startDeviceName.value = _selectedDeviceName.value
-        ServiceController.start(ctx, profileId, _selectedDeviceName.value)
+        streamStartGuardUntil = SystemClock.elapsedRealtime() + START_GUARD_MS
+        ServiceController.start(getApplication(), profileId, _selectedDeviceName.value)
     }
 
     fun stop() {
@@ -358,7 +483,7 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleRecording() {
         val state = streamState.value
         if (state !is StreamState.Live) {
-            _userMessage.value = "Start streaming first"
+            message(R.string.msg_start_streaming_first)
             return
         }
         ServiceController.setRecording(getApplication(), !_isRecording.value)
@@ -376,9 +501,12 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
             ServiceController.stopRecording(ctx)
             return
         }
+        // A start is already in flight (service hasn't reported Recording yet): a second
+        // ACTION_START would race the first one's file/sink setup.
+        if (SystemClock.elapsedRealtime() < recorderStartGuardUntil) return
         val profileId = _selectedProfileId.value
         if (profileId == null) {
-            _userMessage.value = "Select a profile first (recorder uses its audio config)"
+            message(R.string.msg_select_profile_for_recorder)
             return
         }
         val needed = missingPermissions(ctx)
@@ -388,51 +516,81 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
             _permissionsNeeded.value = needed
             return
         }
+        launchRecorder(profileId)
+    }
+
+    private fun launchRecorder(profileId: Long) {
         _startDeviceName.value = _selectedDeviceName.value
-        ServiceController.startRecording(ctx, profileId, _selectedDeviceName.value)
+        recorderStartGuardUntil = SystemClock.elapsedRealtime() + START_GUARD_MS
+        ServiceController.startRecording(getApplication(), profileId, _selectedDeviceName.value)
     }
 
     /** ServiceConnection pushes the bound RecordService state in here. */
     fun onRecordStateChanged(state: RecordState) {
         _recordState.value = state
+        if (state !is RecordState.Idle) recorderStartGuardUntil = 0L
+        if (state is RecordState.Recording) _lastSavedPath.value = state.path
     }
 
     /**
      * Push now-playing metadata via Ultravox 0x902 (admin-free) on the running stream.
      * Routes through [ServiceController] -> [StreamService.ACTION_META] -> [UvoxClient.updateNowPlaying].
+     * Gated on the RUNNING stream, not the selection: the title belongs to what is on air.
      */
     fun updateNowPlaying(title: String) {
-        val p = selectedProfile.value
-        if (p == null) { _userMessage.value = "No profile selected"; return }
-        if (streamState.value !is StreamState.Live) { _userMessage.value = "Start streaming first"; return }
+        if (streamState.value !is StreamState.Live || streamProfile.value == null) {
+            message(R.string.msg_start_streaming_first)
+            return
+        }
         ServiceController.updateNowPlaying(getApplication(), title)
-        _userMessage.value = "Title updated"
+        message(R.string.msg_title_updated)
     }
 
-    /** Called by MainActivity after the runtime permission flow completes. */
-    fun onPermissionsResult(results: Map<String, Boolean>) {
+    /**
+     * MainActivity is about to launch the system permission dialog. Clearing the request
+     * here (the pending profile id stays) means a rotation while the dialog is up doesn't
+     * re-collect a non-empty list and launch a second, stacked request; the result is still
+     * delivered to the recreated Activity's launcher.
+     */
+    fun onPermissionRequestLaunched() {
+        if (NOTIFICATIONS_PERMISSION != null && NOTIFICATIONS_PERMISSION in _permissionsNeeded.value) {
+            uiPrefs.edit().putBoolean(KEY_NOTIF_ASKED, true).apply()
+        }
+        _permissionsNeeded.value = emptyList()
+    }
+
+    /**
+     * Called by MainActivity after the runtime permission flow completes. Only RECORD_AUDIO
+     * gates the start: POST_NOTIFICATIONS is requested alongside but optional — the
+     * foreground service runs fine without it (its notification is just hidden).
+     *
+     * [micPermanentlyDenied] needs Activity.shouldShowRequestPermissionRationale, hence it is
+     * computed by MainActivity; when true the system will no longer show a dialog, so the
+     * message carries a deep link to the app's settings page instead.
+     */
+    fun onPermissionsResult(micPermanentlyDenied: Boolean) {
         _permissionsNeeded.value = emptyList()
         val id = pendingStartProfileId
         val forRecorder = pendingStartIsRecorder
         pendingStartProfileId = null
         pendingStartIsRecorder = false
         if (id == null) return
-        if (results.values.all { it }) {
-            if (forRecorder) {
-                _startDeviceName.value = _selectedDeviceName.value
-                ServiceController.startRecording(getApplication(), id, _selectedDeviceName.value)
-            } else {
-                _startSnapshot.value = selectedProfile.value
-                _startDeviceName.value = _selectedDeviceName.value
-                ServiceController.start(getApplication(), id, _selectedDeviceName.value)
-            }
-        } else {
-            _userMessage.value = "Microphone permission required"
+        val ctx = getApplication<Application>()
+        val micGranted = ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        when {
+            micGranted -> if (forRecorder) launchRecorder(id) else launchStream(id)
+            micPermanentlyDenied -> _userMessage.value = UserMessage(
+                UiText.Res(R.string.msg_mic_permission_blocked),
+                action = UserAction.OpenAppSettings,
+            )
+            else -> message(R.string.msg_mic_permission_required)
         }
     }
 
     /** ServiceConnection pushes the bound service's state in here. */
     fun onServiceStateChanged(state: StreamState) {
+        if (state != _streamState.value) streamStartGuardUntil = 0L
         _streamState.value = state
     }
 
@@ -444,16 +602,32 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     /** ServiceConnection pushes the service's recording flags in here. */
     fun onRecording(isRecording: Boolean, path: String?) {
         _isRecording.value = isRecording
-        if (path != null) _recordingPath.value = path
+        // Only a NEW path counts as "last saved": the service re-emits its last/active path on
+        // every (re)bind, which must not override a newer standalone-recorder file.
+        if (path != null && path != _recordingPath.value) {
+            _recordingPath.value = path
+            _lastSavedPath.value = path
+        }
+    }
+
+    // Edge detector for the service's latched recordingFailed: the flow replays `true` on every
+    // rebind/resume, but the snackbar must fire once per failure (VM outlives rotation).
+    private var recordingFailedSeen = false
+
+    /** The live stream's armed recording died (disk full, storage gone); the stream continues. */
+    fun onRecordingFailed(failed: Boolean) {
+        if (failed && !recordingFailedSeen) message(R.string.err_record_write_failed)
+        recordingFailedSeen = failed
     }
 
     private fun missingPermissions(context: android.content.Context): List<String> {
-        // RECORD_AUDIO always; POST_NOTIFICATIONS on API 33+ (declared in manifest).
+        // RECORD_AUDIO always; POST_NOTIFICATIONS on API 33+ (declared in manifest) but only
+        // asked once — it's optional, and re-prompting on every Start after a "no" is nagging.
+        val askNotifications = NOTIFICATIONS_PERMISSION != null &&
+            !uiPrefs.getBoolean(KEY_NOTIF_ASKED, false)
         return buildList {
             add(android.Manifest.permission.RECORD_AUDIO)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                add(android.Manifest.permission.POST_NOTIFICATIONS)
-            }
+            if (askNotifications) add(NOTIFICATIONS_PERMISSION!!)
         }.filter {
             context.checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED
         }
@@ -471,6 +645,17 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         private const val KEY_GAIN = "gain"
         private const val KEY_DEVICE = "input_device_name"
         private const val KEY_SELECTED_PROFILE = "selected_profile_id"
+        private const val KEY_STREAM_PROFILE = "stream_profile_id"
+        private const val KEY_KEEP_SCREEN_ON = "keep_screen_on_live"
+        private const val KEY_NOTIF_ASKED = "notifications_asked"
+
+        /** Double-tap window for START intents (see [streamStartGuardUntil]). */
+        private const val START_GUARD_MS = 3_000L
+
+        private val NOTIFICATIONS_PERMISSION: String? =
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                android.Manifest.permission.POST_NOTIFICATIONS
+            } else null
 
         /** Input device types exposed in the selector (built-in, wired, USB, BT classic + LE). */
         private val ALLOWED_INPUT_TYPES = setOf(
@@ -482,30 +667,33 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
             AudioDeviceInfo.TYPE_BLE_HEADSET,
         )
 
-        /**
-         * Human-readable label: trust productName when it's a real device name, else derive from
-         * type. There is no AudioDeviceInfo.getName(); getProductName() returns Build.MODEL when the
-         * port has no real name (typical for TYPE_BUILTIN_MIC) — that's the unreadable string users
-         * saw. Detect that substitution and fall back to a type-derived label.
-         */
-        private fun labelFor(dev: AudioDeviceInfo): String {
-            val raw = dev.productName?.toString()?.trim().orEmpty()
-            val plausible = raw.isNotEmpty() &&
-                raw != android.os.Build.MODEL &&
-                raw != android.os.Build.DEVICE &&
-                raw != android.os.Build.PRODUCT
-            return if (plausible) raw else typeLabel(dev.type)
-        }
+    }
 
-        private fun typeLabel(type: Int): String = when (type) {
-            AudioDeviceInfo.TYPE_BUILTIN_MIC -> "Built-in microphone"
-            AudioDeviceInfo.TYPE_USB_DEVICE,
-            AudioDeviceInfo.TYPE_USB_HEADSET -> "USB microphone"
-            AudioDeviceInfo.TYPE_WIRED_HEADSET -> "Wired headset"
-            AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
-            AudioDeviceInfo.TYPE_BLE_HEADSET -> "Bluetooth headset"
-            else -> "Microphone"
-        }
+    /**
+     * Human-readable label: trust productName when it's a real device name, else derive from
+     * type. There is no AudioDeviceInfo.getName(); getProductName() returns Build.MODEL when the
+     * port has no real name (typical for TYPE_BUILTIN_MIC) — that's the unreadable string users
+     * saw. Detect that substitution and fall back to a type-derived label (localized — resolved
+     * at refresh time; Settings re-runs the refresh whenever it is recomposed fresh).
+     */
+    private fun labelFor(dev: AudioDeviceInfo): String {
+        val raw = dev.productName?.toString()?.trim().orEmpty()
+        val plausible = raw.isNotEmpty() &&
+            raw != android.os.Build.MODEL &&
+            raw != android.os.Build.DEVICE &&
+            raw != android.os.Build.PRODUCT
+        return if (plausible) raw else getApplication<Application>().getString(typeLabelRes(dev.type))
+    }
+
+    @StringRes
+    private fun typeLabelRes(type: Int): Int = when (type) {
+        AudioDeviceInfo.TYPE_BUILTIN_MIC -> R.string.mic_type_builtin
+        AudioDeviceInfo.TYPE_USB_DEVICE,
+        AudioDeviceInfo.TYPE_USB_HEADSET -> R.string.mic_type_usb
+        AudioDeviceInfo.TYPE_WIRED_HEADSET -> R.string.mic_type_wired
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+        AudioDeviceInfo.TYPE_BLE_HEADSET -> R.string.mic_type_bluetooth
+        else -> R.string.mic_type_generic
     }
 }
 

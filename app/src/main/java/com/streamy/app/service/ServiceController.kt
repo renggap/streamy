@@ -27,10 +27,9 @@ object ServiceController {
     }
 
     fun stop(context: Context) {
-        val intent = Intent(context, StreamService::class.java).apply {
+        deliverStop(context, Intent(context, StreamService::class.java).apply {
             action = StreamService.ACTION_STOP
-        }
-        ContextCompat.startForegroundService(context, intent)
+        })
     }
 
     /**
@@ -66,10 +65,24 @@ object ServiceController {
 
     /** Stop the standalone recorder. */
     fun stopRecording(context: Context) {
-        val intent = Intent(context, RecordService::class.java).apply {
+        deliverStop(context, Intent(context, RecordService::class.java).apply {
             action = RecordService.ACTION_STOP
+        })
+    }
+
+    /**
+     * STOP is a plain `startService`, never `startForegroundService`: the latter promises a
+     * startForeground() within ~5 s, which a service that is already torn down (or just stops)
+     * never keeps → ForegroundServiceDidNotStartInTimeException. STOP is only sent from the
+     * visible UI (or the service's own notification), so a background-start refusal is not
+     * expected; if one happens anyway there is nothing running worth stopping.
+     */
+    private fun deliverStop(context: Context, intent: Intent) {
+        try {
+            context.startService(intent)
+        } catch (e: IllegalStateException) {
+            android.util.Log.w("ServiceController", "stop not delivered", e)
         }
-        ContextCompat.startForegroundService(context, intent)
     }
 
     /** Convenience for binders; UI owns the [ServiceConnection] lifecycle. */

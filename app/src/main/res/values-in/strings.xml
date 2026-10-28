@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Bahasa Indonesia. Keep in sync with values/strings.xml. Terminology follows the web site
+  (siaran / bersiaran / mengudara, "Anda"). Protocol / product names are not translated.
+  app_name, brand_name and unit_kbps_format are untranslatable and live only in values/.
+-->
+<resources>
+    <!-- Common actions -->
+    <string name="action_start">MULAI</string>
+    <string name="action_stop">HENTIKAN</string>
+    <string name="action_retry">Coba lagi</string>
+    <string name="action_dismiss">Tutup</string>
+    <string name="action_update">Perbarui</string>
+    <string name="action_save">Simpan</string>
+    <string name="action_save_changes">Simpan perubahan</string>
+    <string name="action_delete">Hapus</string>
+    <string name="action_cancel">Batal</string>
+    <string name="action_clear">Hapus semua</string>
+    <string name="action_back">Kembali</string>
+    <string name="action_open_settings">Setelan</string>
+
+    <!-- Navigation + on-air banner -->
+    <string name="nav_home">Beranda</string>
+    <string name="nav_profiles">Profil</string>
+    <string name="nav_settings">Setelan</string>
+    <string name="banner_with_profile">%1$s · %2$s</string>
+    <string name="banner_open_home">buka kontrol siaran</string>
+
+    <!-- Stream states -->
+    <string name="state_off_air">TIDAK MENGUDARA</string>
+    <string name="state_connecting">MENYAMBUNG…</string>
+    <string name="state_on_air">MENGUDARA</string>
+    <string name="state_reconnecting">MENYAMBUNG ULANG · percobaan %1$d</string>
+    <string name="state_error">BERHENTI · GALAT</string>
+
+    <!-- Badges -->
+    <string name="badge_on_air">Mengudara</string>
+    <string name="badge_selected">Dipilih</string>
+    <string name="badge_recording">Merekam</string>
+    <string name="badge_tapping_stream">Merekam siaran</string>
+
+    <!-- Home -->
+    <string name="home_eyebrow">Konsol siaran</string>
+    <string name="home_tagline">Siarkan suara Anda secara langsung ke server SHOUTcast atau Icecast.</string>
+    <string name="home_section_broadcast">Siaran</string>
+    <string name="home_section_signal">Sinyal</string>
+    <string name="home_section_recorder">Perekam</string>
+    <string name="home_section_setup">Pengaturan</string>
+    <string name="home_hint_start">Ketuk untuk mengudara</string>
+    <string name="home_hint_stop">Ketuk untuk menghentikan siaran</string>
+    <string name="home_stop_confirm_title">Hentikan siaran?</string>
+    <string name="home_stop_confirm_body">Pendengar akan langsung terputus.</string>
+    <string name="home_stop_confirm_action">Hentikan siaran</string>
+    <string name="home_stop_confirm_keep">Tetap bersiaran</string>
+    <string name="home_needs_restart">Pengaturan berubah — hentikan lalu mulai ulang siaran untuk menerapkannya</string>
+    <string name="home_profile">Profil</string>
+    <string name="home_no_profile_selected">Belum ada profil dipilih</string>
+    <string name="home_profile_summary">%1$s:%2$d · %3$s %4$d kbps</string>
+    <string name="home_create_profile_hint">Buat profil untuk mulai bersiaran</string>
+    <string name="home_manage">Kelola</string>
+    <string name="home_manage_profiles">Kelola profil</string>
+    <string name="home_select_profile_first">Pilih profil terlebih dahulu</string>
+    <string name="home_select_profile_body">Codec, bitrate, sample rate, dan kanal diatur per profil server. Tambah atau pilih profil untuk mulai bersiaran.</string>
+    <string name="home_now_playing">Sedang diputar</string>
+    <string name="home_now_playing_placeholder">Artis - Judul</string>
+    <string name="home_mic_volume">Volume mikrofon</string>
+    <string name="home_mic_volume_value">%1$d%%</string>
+    <plurals name="home_dropped_frames">
+        <item quantity="other">%1$d frame terbuang — jaringan tidak sanggup mengejar; pendengar mungkin mendengar jeda</item>
+    </plurals>
+    <plurals name="home_profiles_available">
+        <item quantity="other">%1$d profil tersedia — pilih salah satu.</item>
+    </plurals>
+
+    <!-- Recorder -->
+    <string name="record_start">Rekam MP3</string>
+    <string name="record_stop">Hentikan rekaman</string>
+    <string name="record_stream_start">Rekam siaran ini</string>
+    <string name="record_stream_stop">Hentikan rekaman siaran</string>
+    <string name="record_saving_to">Menyimpan ke: %1$s</string>
+    <string name="record_saved_to">Tersimpan di: %1$s</string>
+
+    <!-- Level meter -->
+    <string name="vu_db">%1$d dB</string>
+    <string name="vu_no_signal">—</string>
+    <string name="vu_cd_level">Level masukan %1$d dB</string>
+    <string name="vu_cd_no_signal">Level masukan: tidak ada sinyal</string>
+
+    <!-- Audio chooser -->
+    <string name="chooser_codec">Codec</string>
+    <string name="chooser_bitrate">Bitrate</string>
+    <string name="chooser_sample_rate">Sample rate</string>
+    <string name="chooser_channels">Kanal</string>
+    <string name="chooser_heaac_hint">HE-AAC v1 · mono dipaksa — mode suara di bawah 32 kbps</string>
+    <string name="chooser_aac_legacy_hint">Siaran AAC dinonaktifkan di versi ini. Ganti profil ini ke MP3 untuk mengudara.</string>
+    <string name="channels_mono">Mono</string>
+    <string name="channels_stereo">Stereo</string>
+
+    <!-- Profiles list -->
+    <string name="profiles_title">Profil server</string>
+    <string name="profiles_none_yet">Belum ada profil</string>
+    <plurals name="profiles_configured">
+        <item quantity="other">%1$d profil tersimpan</item>
+    </plurals>
+    <string name="profiles_add">Tambah profil</string>
+    <string name="profiles_add_first">Tambahkan profil pertama Anda</string>
+    <string name="profiles_empty_body">Profil menyimpan alamat server, kredensial, dan pengaturan audio untuk satu stasiun.</string>
+    <string name="profiles_delete_title">Hapus “%1$s”?</string>
+    <string name="profiles_delete_body">Profil ini akan dihapus dari perangkat ini. Server-nya sendiri tidak terpengaruh.</string>
+    <string name="profile_row_summary">%1$s · %2$s:%3$d · %4$s %5$d kbps · %6$s</string>
+    <string name="mode_dj">DJ</string>
+    <string name="mode_source">Source</string>
+    <string name="cd_edit_profile">Ubah %1$s</string>
+    <string name="cd_delete_profile">Hapus %1$s</string>
+
+    <!-- Profile editor -->
+    <string name="field_required">Wajib diisi</string>
+    <string name="edit_title_new">Profil baru</string>
+    <string name="edit_title_edit">Ubah profil</string>
+    <string name="edit_subtitle_new">SHOUTcast v2 · Icecast</string>
+    <string name="edit_subtitle_editing">Mengubah</string>
+    <string name="edit_group_server">Server</string>
+    <string name="edit_group_audio">Audio</string>
+    <string name="edit_mode">Mode</string>
+    <string name="edit_azuracast">Server AzuraCast</string>
+    <string name="edit_azuracast_hint">Memakai protokol DJ Icecast, bukan SHOUTcast Ultravox. Biarkan kosong untuk sc_trans / DNAS.</string>
+    <string name="edit_name">Nama</string>
+    <string name="edit_name_placeholder">Stasiun saya</string>
+    <string name="edit_host">Host</string>
+    <string name="edit_host_placeholder">radio.example.com</string>
+    <string name="edit_port">Port</string>
+    <string name="edit_dj_port">Port DJ</string>
+    <string name="edit_port_error">Port harus 1–65535</string>
+    <string name="edit_sid">Stream id</string>
+    <string name="edit_sid_error">Stream id harus angka 1 atau lebih</string>
+    <string name="edit_dj_user">Pengguna DJ</string>
+    <string name="edit_dj_password">Kata sandi DJ</string>
+    <string name="edit_password">Kata sandi</string>
+    <string name="edit_dj_password_placeholder">Kata sandi DJ</string>
+    <string name="edit_password_placeholder">Kata sandi source</string>
+    <string name="edit_password_show">Tampilkan kata sandi</string>
+    <string name="edit_password_hide">Sembunyikan kata sandi</string>
+    <string name="edit_mount">Mount</string>
+    <string name="edit_dj_mount">Mount DJ</string>
+    <string name="edit_delete_this_profile">profil ini</string>
+    <string name="edit_delete_title">Hapus profil ini?</string>
+    <string name="edit_delete_body">Menghapus “%1$s” tidak dapat dibatalkan.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Setelan</string>
+    <string name="settings_subtitle">Tentang · masukan · tampilan · legal · data</string>
+    <string name="settings_group_about">Tentang</string>
+    <string name="settings_about_body">Konsol siaran untuk server SHOUTcast v2 dan Icecast.</string>
+    <string name="settings_version">Versi %1$s</string>
+    <string name="settings_group_input">Perangkat masukan</string>
+    <string name="settings_input_label">Mikrofon</string>
+    <string name="settings_system_default">Bawaan sistem</string>
+    <string name="settings_input_hint">Mikrofon terpilih berlaku saat siaran berikutnya dimulai. Perangkat dicocokkan berdasarkan nama setiap sesi, jadi aman dicabut-pasang atau setelah reboot.</string>
+    <string name="settings_group_display">Tampilan</string>
+    <string name="settings_keep_screen_on">Layar tetap menyala saat mengudara</string>
+    <string name="settings_keep_screen_on_hint">Layar hanya dibuat tetap menyala selama Anda mengudara.</string>
+    <string name="settings_group_legal">Legal</string>
+    <string name="settings_lame_unavailable">Pemberitahuan LAME tidak tersedia.</string>
+    <string name="settings_cleartext_note">HTTP tanpa enkripsi diaktifkan di build debug untuk server pengembangan LAN. Build rilis membatasi klien HTTP ke TLS; protokol source raw-socket (SHOUTcast/Ultravox/Icecast) tidak terpengaruh.</string>
+    <string name="settings_group_data">Data</string>
+    <plurals name="settings_profiles_stored">
+        <item quantity="other">%1$d profil tersimpan di perangkat ini.</item>
+    </plurals>
+    <string name="settings_clear_all">Hapus semua profil</string>
+    <string name="settings_clear_title">Hapus semua profil?</string>
+    <string name="settings_clear_body">Ini menghapus semua profil server di perangkat ini. Server-nya sendiri tidak terpengaruh.</string>
+
+    <!-- Microphone types -->
+    <string name="mic_type_builtin">Mikrofon bawaan</string>
+    <string name="mic_type_usb">Mikrofon USB</string>
+    <string name="mic_type_wired">Headset kabel</string>
+    <string name="mic_type_bluetooth">Headset Bluetooth</string>
+    <string name="mic_type_generic">Mikrofon</string>
+
+    <!-- Snackbar messages -->
+    <string name="msg_saved">“%1$s” tersimpan.</string>
+    <string name="msg_saved_restart_to_apply">“%1$s” tersimpan. Mulai ulang siaran untuk menerapkannya.</string>
+    <string name="msg_saved_not_selected">“%1$s” tersimpan. Profil ini tidak dipilih selama Anda mengudara.</string>
+    <string name="msg_deleted">“%1$s” dihapus.</string>
+    <string name="msg_stop_before_switch">Hentikan siaran sebelum mengganti profil.</string>
+    <string name="msg_profile_on_air_locked">Profil ini sedang mengudara. Hentikan siaran terlebih dahulu.</string>
+    <string name="msg_stop_before_clear">Hentikan siaran sebelum menghapus profil.</string>
+    <string name="msg_no_profiles_to_clear">Tidak ada profil untuk dihapus.</string>
+    <plurals name="msg_cleared_profiles">
+        <item quantity="other">%1$d profil dihapus.</item>
+    </plurals>
+    <string name="msg_profile_gone">Profil itu sudah dihapus. Pilih profil lain.</string>
+    <string name="msg_no_profile_selected">Pilih profil server terlebih dahulu.</string>
+    <string name="msg_start_streaming_first">Mulai siaran terlebih dahulu.</string>
+    <string name="msg_select_profile_for_recorder">Pilih profil terlebih dahulu — perekam memakai pengaturan audionya.</string>
+    <string name="msg_title_updated">Judul diperbarui</string>
+    <string name="msg_mic_permission_required">Akses mikrofon diperlukan untuk bersiaran atau merekam.</string>
+    <string name="msg_mic_permission_blocked">Akses mikrofon untuk Streamy dimatikan. Izinkan di Setelan.</string>
+
+    <!-- Errors -->
+    <string name="err_detail">Detail: %1$s</string>
+    <string name="err_gave_up">Koneksi terputus dan menyerah setelah %1$d percobaan. Periksa jaringan Anda, lalu coba lagi.</string>
+    <string name="err_mic_busy">Mikrofon sedang dipakai aplikasi atau rekaman lain.</string>
+    <string name="err_profile_missing">Profil untuk siaran ini sudah tidak ada.</string>
+    <string name="err_start_failed">Siaran gagal dimulai.</string>
+    <string name="err_stream_in_use">Sumber lain sudah bersiaran di stream ini.</string>
+    <string name="err_auth">Server menolak kata sandi atau nama pengguna.</string>
+    <string name="err_forbidden">Server menolak source ini.</string>
+    <string name="err_mount_not_found">Mount point tidak ada di server.</string>
+    <string name="err_format_rejected">Server tidak menerima format audio ini.</string>
+    <string name="err_server_rejected">Server menolak koneksi.</string>
+    <string name="err_unknown_host">Alamat server tidak ditemukan. Periksa nama host.</string>
+    <string name="err_conn_refused">Server menolak koneksi. Periksa port.</string>
+    <string name="err_timeout">Server tidak merespons tepat waktu.</string>
+    <string name="err_no_network">Tidak ada koneksi jaringan.</string>
+    <string name="err_generic">Siaran berhenti secara tak terduga.</string>
+    <string name="err_record_open_failed">Gagal membuat berkas rekaman.</string>
+    <string name="err_record_failed">Rekaman berhenti karena galat.</string>
+    <string name="err_record_write_failed">Rekaman berhenti: berkas tidak bisa ditulis (penyimpanan penuh atau dilepas?).</string>
+    <string name="err_audio_failed">Mesin audio berhenti tiba-tiba. Coba mulai lagi.</string>
+</resources>

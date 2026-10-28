@@ -109,4 +109,76 @@ class Mp3TranscodeSinkTest {
             sink.close()
         }
     }
+
+    @Test fun flush_with_full_queue_still_delivers_end_marker_and_drains() {
+        // Regression: flush() used offer(END_MARKER), which fails exactly when the queue is full
+        // (transcode thread behind) — the thread then never saw the marker and the encoder tail
+        // was lost. The marker must get through once the thread catches up.
+        val enc = BlockingEncoder()
+        val out = ByteArrayOutputStream()
+        val sink = Mp3TranscodeSink(out, 44_100, mono = true, encoderFactory = { enc })
+        try {
+            sink.onPcm(ShortArray(1024))
+            enc.awaitStarted()
+            repeat(32) { sink.onPcm(ShortArray(1024)) }   // queue now full
+            val flushed = AtomicBoolean(false)
+            val t = Thread { sink.flush(); flushed.set(true) }
+            t.start()
+            Thread.sleep(50)
+            enc.release()                                 // thread catches up, takes the marker
+            t.join(3_000)
+            assertThat(flushed.get()).isTrue()
+            assertThat(enc.flushCalls.get()).isEqualTo(1) // ran encoder.flush() → saw the marker
+            assertThat(enc.encodes.get()).isEqualTo(33)   // no backlog was thrown away
+        } finally {
+            enc.release()
+            sink.close()
+        }
+    }
+
+    @Test fun empty_pcm_frame_is_not_mistaken_for_end_marker() {
+        // Regression: the run-loop ended on ANY empty frame, so a dead-mic empty frame silently
+        // stopped the recording. Only the END_MARKER instance ends the loop.
+        val enc = BlockingEncoder().also { it.release() }
+        val out = ByteArrayOutputStream()
+        val sink = Mp3TranscodeSink(out, 44_100, mono = true, encoderFactory = { enc })
+        try {
+            sink.onPcm(ShortArray(0))
+            sink.onPcm(ShortArray(4))
+            sink.flush()
+            assertThat(enc.encodes.get()).isEqualTo(2)
+            assertThat(sink.failed).isFalse()
+        } finally {
+            sink.close()
+        }
+    }
+
+    @Test fun encoder_death_marks_sink_failed() {
+        val dying = object : Encoder {
+            override val mime = "audio/mpeg"
+            override fun encode(pcm: ShortArray): List<ByteArray> { throw IllegalStateException("encoder died") }
+            override fun flush(): List<ByteArray> = emptyList()
+            override fun close() {}
+        }
+        val sink = Mp3TranscodeSink(ByteArrayOutputStream(), 44_100, mono = true, encoderFactory = { dying })
+        try {
+            sink.onPcm(ShortArray(1024))
+            sink.flush()
+            assertThat(sink.failed).isTrue()
+        } finally {
+            sink.close()
+        }
+    }
+
+    @Test fun direct_sink_latches_failed_on_io_error() {
+        val broken = object : java.io.OutputStream() {
+            override fun write(b: Int) { throw java.io.IOException("ENOSPC") }
+            override fun write(b: ByteArray, off: Int, len: Int) { throw java.io.IOException("ENOSPC") }
+        }
+        val sink = Mp3DirectSink(broken)
+        // Larger than the 128 KB buffer so the write reaches the failing stream immediately.
+        sink.onEncoded(listOf(ByteArray(200 * 1024)))
+        assertThat(sink.failed).isTrue()
+        sink.close()
+    }
 }

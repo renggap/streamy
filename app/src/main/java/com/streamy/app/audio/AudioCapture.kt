@@ -34,56 +34,74 @@ class AudioCapture(
 ) {
     private val channelConfig =
         if (mono) AudioFormat.CHANNEL_IN_MONO else AudioFormat.CHANNEL_IN_STEREO
-    private var record: AudioRecord? = null
+    @Volatile private var record: AudioRecord? = null
     @Volatile private var running = false
-    private var thread: Thread? = null
+    @Volatile private var thread: Thread? = null
 
     /** Linear mic gain (1.0 = unity). Written from UI thread via binder, read on streamy-audio;
      *  @Volatile gives the happens-before for a 32-bit float. */
     @Volatile var gain: Float = initialGain
 
-    /** Called repeatedly with a freshly-filled buffer; return false to stop. */
+    /**
+     * Called repeatedly with a freshly-filled buffer; return false to stop. A zero-length frame
+     * is the dead-mic signal: ~[DEAD_READ_LIMIT] x 10 ms (~1 s) of consecutive failed reads
+     * (ERROR_DEAD_OBJECT after a USB unplug / audioserver restart, or another app holding the
+     * mic). Consumers must not treat it as audio.
+     *
+     * An exception thrown by [onFrame] ends capture (logged) instead of escaping the daemon
+     * thread — an uncaught throw on `streamy-audio` would kill the whole process mid-broadcast.
+     */
     fun start(onFrame: (ShortArray) -> Boolean) {
         val minBuf = AudioRecord.getMinBufferSize(
             sampleRateHz, channelConfig, AudioFormat.ENCODING_PCM_16BIT
         )
         require(minBuf > 0) { "min buffer $minBuf (bad params?)" }
-        val bufBytes = Math.max(minBuf, frameSamples * 2 * (if (mono) 1 else 2))
-        record = AudioRecord(
+        val frameBytes = frameSamples * 2 * (if (mono) 1 else 2)
+        // Several frames of headroom: a single-frame record buffer overruns whenever the audio
+        // thread is descheduled for one frame-time (~23 ms).
+        val bufBytes = Math.max(minBuf * 2, frameBytes * 4)
+        val rec = AudioRecord(
             MediaRecorder.AudioSource.VOICE_COMMUNICATION,
             sampleRateHz, channelConfig, AudioFormat.ENCODING_PCM_16BIT, bufBytes
         )
-        check(record?.state == AudioRecord.STATE_INITIALIZED) { "AudioRecord not initialized" }
+        if (rec.state != AudioRecord.STATE_INITIALIZED) {
+            // Release now: stop() never sees an uninitialised record (its stop() would throw).
+            rec.release()
+            throw IllegalStateException("AudioRecord not initialized")
+        }
         // setPreferredDevice must precede startRecording; post-start routing is OEM-flaky.
         preferredDevice?.let { dev ->
-            if (!record!!.setPreferredDevice(dev)) {
+            if (!rec.setPreferredDevice(dev)) {
                 Log.w(TAG, "setPreferredDevice rejected for ${dev.productName}")
             }
         }
-        record!!.startRecording()
+        record = rec
+        rec.startRecording()
         running = true
         thread = kotlin.concurrent.thread(name = "streamy-audio", isDaemon = true) {
-          val rec = record ?: return@thread
           val buf = ShortArray(frameSamples * (if (mono) 1 else 2))
           var consecutiveErrors = 0
-          while (running) {
-              val n = try { rec.read(buf, 0, buf.size) } catch (_: Throwable) { -1 }
-              if (n > 0) {
-                  consecutiveErrors = 0
-                  applyGain(buf, n)
-                  if (!onFrame(buf.copyOf(n))) running = false
-              } else {
-                  // Zero/negative = dead mic or transient underrun. Count toward the
-                  // pipeline's short-read detector instead of spin-looping.
-                  consecutiveErrors++
-                  try { Thread.sleep(10) } catch (_: InterruptedException) {}
-                  if (consecutiveErrors > 100) {
-                      // ~1s of dead reads: surface as a short frame so AudioPipeline
-                      // trips onMicBusy via its SHORT_READ_LIMIT path.
-                      if (!onFrame(ShortArray(0))) running = false
+          try {
+              while (running) {
+                  val n = try { rec.read(buf, 0, buf.size) } catch (_: Throwable) { -1 }
+                  if (n > 0) {
                       consecutiveErrors = 0
+                      applyGain(buf, n)
+                      if (!onFrame(buf.copyOf(n))) running = false
+                  } else {
+                      // Zero/negative = dead mic or transient underrun. Back off instead of
+                      // spin-looping; only a sustained run is reported (as an empty frame).
+                      consecutiveErrors++
+                      try { Thread.sleep(10) } catch (_: InterruptedException) {}
+                      if (consecutiveErrors > DEAD_READ_LIMIT) {
+                          if (!onFrame(DEAD_FRAME)) running = false
+                          consecutiveErrors = 0
+                      }
                   }
               }
+          } catch (t: Throwable) {
+              Log.e(TAG, "capture loop aborted", t)
+              running = false
           }
         }
     }
@@ -97,19 +115,37 @@ class AudioCapture(
         }
     }
 
-    fun stop() {
+    /**
+     * Stops capture and joins the audio thread (bounded). Returns true if the thread has exited,
+     * so callers know whether the encoder is safe to flush. Safe from any thread — including the
+     * audio thread itself (mic-busy teardown runs inside onFrame), where joining would just burn
+     * the full timeout waiting on ourselves.
+     */
+    fun stop(): Boolean {
         running = false
-        record?.run { try { stop() } finally { release() } }
+        record?.run {
+            // stop() throws IllegalStateException if recording never started; release regardless.
+            try { stop() } catch (_: IllegalStateException) {} finally { release() }
+        }
         record = null
-        // Best-effort join so the audio thread can't call encode() after we tear down;
-        // bounded by 500ms + try/catch so a stuck thread can't wedge stop(). If the thread is
-        // still alive after the join, Mp3Encoder.encode's `check(!closed)` (defense-in-depth)
-        // turns any late frame into a loud failure instead of UB on a freed native handle.
-        try { thread?.join(500) } catch (_: InterruptedException) {}
+        val t = thread ?: return true
+        if (t === Thread.currentThread()) {
+            thread = null
+            return true   // we ARE the audio thread: no further onFrame after this returns false
+        }
+        // Bounded so a stuck thread can't wedge stop(). If it outlives the join, the encoders'
+        // synchronized + closed-check turn a late frame into a caught failure, not UB.
+        try { t.join(JOIN_MS) } catch (_: InterruptedException) {}
         thread = null
+        return !t.isAlive
     }
 
     companion object {
         private const val TAG = "AudioCapture"
+        private const val JOIN_MS = 500L
+        /** Consecutive failed reads (10 ms apart) before reporting a dead mic: ~1 s. */
+        private const val DEAD_READ_LIMIT = 100
+        /** The dead-mic signal handed to onFrame. Shared, never written. */
+        private val DEAD_FRAME = ShortArray(0)
     }
 }

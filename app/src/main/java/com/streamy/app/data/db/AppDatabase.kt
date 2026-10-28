@@ -5,7 +5,9 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [ProfileEntity::class], version = 5, exportSchema = false)
+@Database(entities = [ProfileEntity::class], version = 5, exportSchema = true)
+// Schema JSON lands in app/schemas/ (committed) so future migrations can be diffed and tested
+// with MigrationTestHelper. v1–v4 predate the export; only v5 onward is on file.
 abstract class AppDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
 
@@ -46,13 +48,13 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * v4 → v5: retire AUTO DJ-protocol sniff. Normalize any AUTO (or null) rows to ULTRAVOX
+         * v4 → v5: retire AUTO DJ-protocol sniff. Normalize any AUTO rows to ULTRAVOX
          * so they keep working under the explicit protocol model. No schema change — the column
          * already exists from v3→v4.
          */
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("UPDATE profiles SET djProtocol='ULTRAVOX' WHERE djProtocol='AUTO' OR djProtocol IS NULL")
+                db.execSQL("UPDATE profiles SET djProtocol='ULTRAVOX' WHERE djProtocol='AUTO'")   // column is NOT NULL since v4
             }
         }
     }

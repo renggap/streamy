@@ -86,26 +86,25 @@ class RecordService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == null) {
-            // System restart after process kill: no profile id to resume from.
-            // Re-promote briefly so we don't miss the FGS timeout, then stop.
-            startForegroundTyped(buildNotification("Idle"))
-            stopRecording()
-            return START_STICKY
+            // Defensive only (START_NOT_STICKY): a recording can't resume after a process kill,
+            // and a sticky restart isn't an FGS start — promoting here could throw on 31+/34+.
+            stopSelf()
+            return START_NOT_STICKY
         }
         when (intent?.action) {
             ACTION_START -> {
                 startForegroundTyped(buildNotification("Preparing…"))
                 val id = intent.getLongExtra(EXTRA_PROFILE_ID, -1L)
                 if (id < 0L) {
-                    _state.value = RecordState.Error("profile_missing")
-                    stopRecording()
+                    synchronized(this) { shuttingDown = false }   // fresh start: let fail() tear down
+                    fail("profile_missing")
                 } else {
                     startWithProfile(id, intent.getStringExtra(EXTRA_DEVICE_NAME))
                 }
             }
-            ACTION_STOP -> stopRecording()
+            ACTION_STOP -> acknowledgeStop()
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun startWithProfile(profileId: Long, deviceName: String?) {
@@ -114,8 +113,7 @@ class RecordService : Service() {
             try {
                 val profile = db.profileDao().byId(profileId)
                 if (profile == null) {
-                    _state.value = RecordState.Error("profile_missing")
-                    stopRecording()
+                    fail("profile_missing")
                     return@launch
                 }
                 profileName = profile.name
@@ -128,13 +126,19 @@ class RecordService : Service() {
                 val target = RecordingStorage.open(this@RecordService, name)
                 if (target == null) {
                     runCatching { enc.close() }
-                    _state.value = RecordState.Error("record_open_failed")
-                    stopRecording()
+                    fail("record_open_failed")
                     return@launch
                 }
-                val sink: StreamSink = if (cfg.codec == Codec.MP3)
-                    Mp3DirectSink(target.stream)
-                else Mp3TranscodeSink(target.stream, cfg.sampleRateHz, cfg.mono)
+                val sink: StreamSink = try {
+                    if (cfg.codec == Codec.MP3) Mp3DirectSink(target.stream)
+                    else Mp3TranscodeSink(target.stream, cfg.sampleRateHz, cfg.mono)
+                } catch (e: Throwable) {
+                    // LAME init failed: close the stream so the fd and the pending MediaStore
+                    // stub (deleted when nothing was written) don't leak; also the encoder.
+                    runCatching { target.stream.close() }
+                    runCatching { enc.close() }
+                    throw e
+                }
 
                 val preferredDevice = resolvePreferredDevice(deviceName)
 
@@ -156,11 +160,15 @@ class RecordService : Service() {
                         encoder = enc,
                         transport = null,
                         sink = sink,
-                        onMicBusy = {
-                            _state.value = RecordState.Error("mic_busy")
-                            stopRecording(preserveTerminal = true)
-                        },
+                        onMicBusy = { fail("mic_busy") },
                         levelFeed = null,
+                        onFatal = { e ->
+                            Log.e(TAG, "audio pipeline failed", e)
+                            scope.launch { fail("audio_failed") }
+                        },
+                        // Recording IS the session here: a write failure (disk full, card
+                        // removed) ends it with a visible error instead of silently dropping.
+                        onSinkError = { scope.launch { fail("record_write_failed") } },
                     )
                     pipeline = p
                     acquireLock()
@@ -168,8 +176,7 @@ class RecordService : Service() {
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "record start failed", e)
-                _state.value = RecordState.Error(e.message ?: "record_failed")
-                stopRecording(preserveTerminal = true)
+                fail(e.message ?: "record_failed")
             }
         }
     }
@@ -183,6 +190,25 @@ class RecordService : Service() {
 
     fun setMicGain(g: Float) {
         pipeline?.setGain(g)
+    }
+
+    /** Terminal failure: show [reason] and tear down, keeping the Error. No-op after teardown. */
+    @Synchronized
+    private fun fail(reason: String) {
+        if (shuttingDown) return
+        _state.value = RecordState.Error(reason)
+        stopRecording(preserveTerminal = true)
+    }
+
+    /** User STOP; after an Error (already torn down) it acknowledges back to Idle. */
+    @Synchronized
+    private fun acknowledgeStop() {
+        if (shuttingDown) {
+            _state.value = RecordState.Idle
+            stopSelf()
+        } else {
+            stopRecording()
+        }
     }
 
     /** Single idempotent teardown. Safe from any thread. */

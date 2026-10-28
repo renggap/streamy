@@ -15,6 +15,8 @@ object LevelTap {
     private const val FLOOR_DB = -90.0f
 
     fun rmsDb(pcm: ShortArray): Float {
+        // Empty input would be 0/0 = NaN, and NaN.roundToInt() throws in the meter's composition.
+        if (pcm.isEmpty()) return FLOOR_DB
         var sum = 0.0
         for (s in pcm) { val n = s.toDouble() / 32768.0; sum += n * n }
         val rms = sqrt(sum / pcm.size)

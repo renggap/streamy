@@ -12,7 +12,9 @@ import android.media.MediaFormat
  * lags the codec no longer silently drops every frame. If the codec is genuinely wedged, the
  * frame is dropped and counted in [droppedFrames] so the caller can surface it.
  *
- * Not thread-safe; callers confine encode/flush/close to a single thread (AudioPipeline).
+ * Callers confine encode/flush to the audio thread; the methods are additionally @Synchronized
+ * so a teardown close() racing a late frame (capture join timed out) waits for it instead of
+ * releasing the codec underneath it.
  */
 class AacEncoder(
     sampleRateHz: Int,
@@ -41,9 +43,18 @@ class AacEncoder(
     @Volatile var droppedFrames: Long = 0
         private set
 
-    init { codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE); codec.start() }
+    init {
+        try {
+            codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            codec.start()
+        } catch (t: Throwable) {
+            // The constructor throwing means no caller ever gets a handle to close().
+            codec.release()
+            throw t
+        }
+    }
 
-    override fun encode(pcm: ShortArray): List<ByteArray> {
+    @Synchronized override fun encode(pcm: ShortArray): List<ByteArray> {
         check(!closed) { "encode after close" }
         if (eos) return emptyList()
         val inIdx = codec.dequeueInputBuffer(INPUT_WAIT_US)
@@ -63,7 +74,8 @@ class AacEncoder(
         return drain()
     }
 
-    override fun flush(): List<ByteArray> {
+    @Synchronized override fun flush(): List<ByteArray> {
+        if (closed) return emptyList()
         // Bounded EOS queue: wait up to EOS_QUEUE_WAIT_MS for an input slot so a wedged codec
         // can't hang stop() for seconds. If no slot frees up, skip the EOS frame entirely and
         // drain what's available — the stream just ends without the formal EOS marker.
@@ -81,8 +93,12 @@ class AacEncoder(
             val o = codec.dequeueOutputBuffer(info, timeoutUs)
             when {
                 o >= 0 -> {
-                    val raw = copyRawAu(codec.getOutputBuffer(o)!!, info.size)
-                    out.add(raw)
+                    // CODEC_CONFIG carries the AudioSpecificConfig (2 bytes), not audio — wrapping
+                    // it in ADTS would send a bogus first frame. A 0-byte EOS buffer is not audio.
+                    val isConfig = info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0
+                    if (!isConfig && info.size > 0) {
+                        out.add(copyRawAu(codec.getOutputBuffer(o)!!, info.size))
+                    }
                     codec.releaseOutputBuffer(o, false)
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return out
                 }
@@ -111,7 +127,7 @@ class AacEncoder(
         return raw
     }
 
-    override fun close() {
+    @Synchronized override fun close() {
         if (closed) return
         closed = true
         try { codec.stop() } catch (_: IllegalStateException) {} finally { codec.release() }
@@ -133,8 +149,9 @@ class AacEncoder(
         const val DRAIN_POLL_US = 10_000L
 
         /** AAC is HE-AAC v1 (AAC-LC + SBR) across the whole ladder — AAC-LC retired. Pure → unit tested.
-         *  ponytail: switch ≤24 kbps mono to HE-AAC v2 (AACObjectHEV2, +Parametric Stereo) for even
-         *  better speech quality once verified on-device against DNAS2. */
+         *  ponytail: switch ≤24 kbps *stereo* to HE-AAC v2 (AACObjectHEV2) — Parametric Stereo needs a
+         *  stereo input, so mono gains nothing. Re-check the ADTS channel config / SBR core rate and
+         *  verify on-device against DNAS2 first (AAC is UI-disabled anyway). */
         fun aacObjectType() =
             MediaCodecInfo.CodecProfileLevel.AACObjectHE
     }

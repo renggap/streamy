@@ -47,26 +47,44 @@ class UvoxClient(
         else { dataClass = 7; dataType = 0x000 } // MP3
     }
 
-    private var socket: Socket? = null
-    private var out: OutputStream? = null
+    // Concurrency: send() runs on the transport coroutine, updateNowPlaying() on its own IO
+    // coroutine, and close()'s Terminate on a helper thread — all writing one socket. [writeLock]
+    // serialises whole messages so frames can't interleave mid-message (DNAS drops the source on
+    // a corrupt frame). [out] is published only after the Standby ACK, so nothing but handshake
+    // traffic can ever land between a handshake request and its reply.
+    private val writeLock = Any()
+    private val stateLock = Any()
+    @Volatile private var socket: Socket? = null
+    @Volatile private var out: OutputStream? = null
+    // Latched by close(): a close() during connect() (user hit Stop mid-handshake) must abort the
+    // handshake, not let it finish into an authenticated source nobody will ever close — the
+    // server would hold the sid "in use" and NAK the next Start.
+    @Volatile private var closed = false
+    // Last now-playing title, replayed after every (re)connect: DNAS forgets it with the source.
+    @Volatile private var lastTitle: String? = null
 
     override fun connect(bitrateKbps: Int, name: String, genre: String) {
         // Close any prior socket so a reconnect never leaks.
         try { socket?.close() } catch (_: Throwable) {}
         socket = null; out = null
-        // Resolve the address BEFORE the Socket apply-scope: inside `Socket().apply { ... }` an
-        // unqualified `port` binds to Socket.getPort() — 0 on an unconnected socket — silently
-        // connecting to host:0 (instant refusal). Live-verified regression against DNAS2 2.6.
+        // Resolve the address from the constructor params, never inside a `Socket().apply { }`
+        // scope: there an unqualified `port` binds to Socket.getPort() — 0 on an unconnected
+        // socket — silently dialing host:0. Live-verified regression against DNAS2 2.6.
         val addr = InetSocketAddress(host, port)
-        val s = Socket().apply {
-            tcpNoDelay = true
-            keepAlive = true
-            connect(addr, HANDSHAKE_TIMEOUT_MS)
-            soTimeout = HANDSHAKE_TIMEOUT_MS
+        val s = Socket()
+        // Publish the socket BEFORE the blocking connect so a concurrent close() can abort it.
+        synchronized(stateLock) {
+            if (closed) throw IOException("client closed")
+            socket = s
         }
         try {
-            socket = s
-            val o = s.getOutputStream(); out = o
+            s.tcpNoDelay = true
+            s.keepAlive = true
+            s.connect(addr, HANDSHAKE_TIMEOUT_MS)
+            s.soTimeout = HANDSHAKE_TIMEOUT_MS
+            val o = s.getOutputStream()
+            val input = s.getInputStream()
+            fun request(cls: Int, type: Int, payload: String?) = exchange(o, input, cls, type, payload)
 
             // 1) Request Cipher -> key. Most servers return "foobar"; Centova and others leave
             //    uvoxcipherkey BLANK and the response is empty. Use the server's actual key
@@ -81,9 +99,11 @@ class UvoxClient(
             // 2) Authenticate: UID = djlogin (DJ mode) or blank (SOURCE); AuthBlob = password
             //    (stream password for SOURCE, djpassword for DJ). Both XTEA-enciphered, hex-emitted.
             val encUid = UvoxXtea.encipher(
-                (djUser ?: "").toByteArray(Charsets.US_ASCII), cipherKey
+                (djUser ?: "").toByteArray(Charsets.UTF_8), cipherKey
             )
-            val encBlob = UvoxXtea.encipher(password.toByteArray(Charsets.US_ASCII), cipherKey)
+            // UTF-8 (identical to ASCII for ASCII passwords): US_ASCII turned every non-ASCII
+            // character into '?', so such a password could never match.
+            val encBlob = UvoxXtea.encipher(password.toByteArray(Charsets.UTF_8), cipherKey)
             val authResp = request(1, 0x001, "2.1:$sid:$encUid:$encBlob")
             if (!authResp.startsWith("ACK")) throw ProtocolException("auth NAK: $authResp")
 
@@ -107,11 +127,16 @@ class UvoxClient(
             if (!standby.startsWith("ACK")) throw ProtocolException("standby NAK: $standby")
 
             s.soTimeout = 0 // streaming: writes own the socket; no read timeout
+            synchronized(stateLock) {
+                if (closed) throw IOException("client closed")
+                out = o
+            }
         } catch (e: Throwable) {
             try { s.close() } catch (_: Throwable) {}
             socket = null; out = null
             throw e
         }
+        lastTitle?.let { updateNowPlaying(it) }
     }
 
     /**
@@ -124,8 +149,11 @@ class UvoxClient(
     override fun send(frame: ByteArray) {
         val o = out ?: throw IOException("client closed")
         val payload = if (dataClass == 8) wrapAdts(frame) else frame
-        o.write(message(dataClass, dataType, payload))
-        o.flush()
+        val msg = message(dataClass, dataType, payload)
+        synchronized(writeLock) {
+            o.write(msg)
+            o.flush()
+        }
     }
 
     /** Wrap one AU in an ADTS header — see [UvoxClient.adtsHeader].
@@ -141,15 +169,27 @@ class UvoxClient(
         // Terminated is best-effort: if the peer died without ACKing the close (half-open TCP),
         // the write can block in kernel retransmit for minutes. Daemon thread + join cap keeps
         // teardown (stopAndShutdown runs on the main thread) bounded; a stuck close can't ANR.
+        val o: OutputStream?
+        val s: Socket?
+        synchronized(stateLock) {
+            closed = true
+            o = out
+            s = socket
+        }
         val sendThread = Thread {
-            runCatching { if (out != null) out!!.write(message(1, 0x005, ByteArray(0))) } // Terminate
-            runCatching { out?.flush() }
+            if (o != null) runCatching {
+                synchronized(writeLock) {
+                    o.write(message(1, 0x005, ByteArray(0))) // Terminate
+                    o.flush()
+                }
+            }
         }
         sendThread.isDaemon = true
         sendThread.start()
         try { sendThread.join(CLOSE_JOIN_MS) } catch (_: InterruptedException) {}
         sendThread.interrupt() // no-op for a blocked socket write; releases nothing but is harmless
-        runCatching { socket?.close() }
+        // Closing the socket also aborts an in-flight connect()/handshake read on another thread.
+        runCatching { s?.close() }
         socket = null; out = null
     }
 
@@ -163,13 +203,21 @@ class UvoxClient(
     override fun updateNowPlaying(title: String) {
         // Strip CR/LF + other control chars (a title can't break the XML) and cap at 512 chars
         // so 6 + xml.size never overflows the u16 payload length in [message].
-        val safe = WireSafety.stripControlChars(title).take(WireSafety.MAX_HEADER_VALUE)
+        val safe = WireSafety.truncate(WireSafety.stripControlChars(title), WireSafety.MAX_HEADER_VALUE)
+        lastTitle = safe
         val xml = ("<?xml version=\"1.0\" encoding=\"UTF-8\" ?><metadata><TIT2>"
             + safe.xmlEsc() + "</TIT2></metadata>").toByteArray(Charsets.UTF_8)
         val payload = ByteArray(6 + xml.size)
         payload[1] = 1; payload[3] = 1; payload[5] = 1 // MetadataID=1, Span=1, Index=1 (BE u16, high byte 0)
         System.arraycopy(xml, 0, payload, 6, xml.size)
-        runCatching { out?.write(message(3, 0x902, payload)); out?.flush() }
+        val o = out ?: return   // not connected yet: replayed after the handshake
+        val msg = message(3, 0x902, payload)
+        runCatching {
+            synchronized(writeLock) {
+                o.write(msg)
+                o.flush()
+            }
+        }
     }
 
     private fun String.xmlEsc() =
@@ -178,17 +226,17 @@ class UvoxClient(
     // ---- Ultravox framing ----
 
     /** Send a message with an ASCIIZ string payload (empty payload if [payload] == null); return the response payload string. */
-    private fun request(cls: Int, type: Int, payload: String?): String {
+    private fun exchange(o: OutputStream, input: InputStream, cls: Int, type: Int, payload: String?): String {
         // ASCIIZ: payload bytes include the terminating NUL; the frame adds its own 0x00 trailer.
+        // UTF-8 so a non-ASCII station name/genre isn't sent as '?' (identical bytes for ASCII).
         val p: ByteArray =
-            if (payload != null) payload.toByteArray(Charsets.US_ASCII) + byteArrayOf(0) else ByteArray(0)
-        out!!.write(message(cls, type, p))
-        out!!.flush()
-        return readPayload()
+            if (payload != null) payload.toByteArray(Charsets.UTF_8) + byteArrayOf(0) else ByteArray(0)
+        o.write(message(cls, type, p))
+        o.flush()
+        return readPayload(input)
     }
 
-    private fun readPayload(): String {
-        val input = socket!!.getInputStream()
+    private fun readPayload(input: InputStream): String {
         val header = readN(input, 6)
         val len = ((header[4].toInt() and 0xFF) shl 8) or (header[5].toInt() and 0xFF)
         val payload = readN(input, len)

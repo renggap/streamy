@@ -25,7 +25,10 @@ android {
         }
         externalNativeBuild {
             cmake {
-                arguments += listOf("-DANDROID_STL=c++_static")
+                // FLEXIBLE_PAGE_SIZES: link libstreamy_lame.so with 16 KB max-page-size so it loads on
+                // 16 KB-page devices (Android 15+) and passes Play's 16 KB requirement (NDK < r28
+                // defaults to 4 KB). CI verifies the APK with `zipalign -c -P 16`.
+                arguments += listOf("-DANDROID_STL=c++_static", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON")
             }
         }
 
@@ -46,9 +49,12 @@ android {
             val lp = Properties()
             rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { lp.load(it) }
             fun lp(k: String, default: String): String = lp.getProperty(k) ?: default
-            buildConfigField("String", "TEST_HOST", "\"${lp("streamy.test.host", "")}\"")
+            // Escape for a Java string literal: a password containing " or \ would otherwise
+            // break BuildConfig codegen.
+            fun javaStr(v: String): String = "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+            buildConfigField("String", "TEST_HOST", javaStr(lp("streamy.test.host", "")))
             buildConfigField("int", "TEST_PORT", lp("streamy.test.port", "0"))
-            buildConfigField("String", "TEST_PASSWORD", "\"${lp("streamy.test.password", "")}\"")
+            buildConfigField("String", "TEST_PASSWORD", javaStr(lp("streamy.test.password", "")))
             buildConfigField("int", "TEST_SID", lp("streamy.test.sid", "1"))
         }
         release {
@@ -58,18 +64,21 @@ android {
                 "proguard-rules.pro"
             )
             // Release signing creds live in gitignored local.properties:
-            //   streamy.keystore.file / .alias / .password
+            //   streamy.keystore.file / .alias / .password (+ optional .keyPassword when the key
+            //   password differs from the store password). CI writes the same keys from secrets.
             // Unsigned release APKs cannot install (INSTALL_PARSE_FAILED_NO_CERTIFICATES).
             val lp = Properties()
             rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { lp.load(it) }
-            val ksFile = rootProject.file(lp.getProperty("streamy.keystore.file", ""))
+            // file("") throws at configuration time, which would break every build (incl. debug/CI)
+            // on a machine without a keystore — only resolve the path when one is configured.
+            val ksFile = lp.getProperty("streamy.keystore.file", "").takeIf { it.isNotBlank() }?.let { rootProject.file(it) }
             val ksPass = lp.getProperty("streamy.keystore.password", "")
-            if (ksFile.exists() && ksPass.isNotEmpty()) {
+            if (ksFile != null && ksFile.exists() && ksPass.isNotEmpty()) {
                 signingConfigs.create("release") {
                     storeFile = ksFile
                     storePassword = ksPass
                     keyAlias = lp.getProperty("streamy.keystore.alias", "streamy")
-                    keyPassword = ksPass
+                    keyPassword = lp.getProperty("streamy.keystore.keyPassword", ksPass)
                 }
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -88,6 +97,10 @@ android {
         compose = true
         buildConfig = true
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {

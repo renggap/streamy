@@ -2,9 +2,11 @@ package com.streamy.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -14,6 +16,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
@@ -24,8 +27,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,8 +43,10 @@ import com.streamy.app.R
  */
 
 /**
- * App identity, the LAME LGPL notice (read raw text), and a destructive "clear all
- * profiles" action. No new persistence — just reads [vm.profiles] and calls vm.clear.
+ * App identity, input device, the "keep screen on while live" preference, the LAME LGPL
+ * notice (read raw text), and a destructive "clear all profiles" action.
+ *
+ * Top-level bottom-nav destination: no Back button (the nav bar and system back cover it).
  *
  * Cleartext policy is now split per build type: debug overlay allows it, release is
  * TLS-only for HTTP clients (see network_security_config.xml). This copy documents that.
@@ -46,14 +55,15 @@ import com.streamy.app.R
 @Composable
 fun SettingsScreen(
     vm: StreamyViewModel,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val profiles by vm.profiles.collectAsStateWithLifecycle()
     val inputDevices by vm.inputDevices.collectAsStateWithLifecycle()
     val selectedDevice = vm.selectedDeviceName.collectAsStateWithLifecycle().value  // plain val (smart-castable)
-    val selectedDeviceLabel = if (selectedDevice == null) "System default"
+    val keepScreenOn by vm.keepScreenOn.collectAsStateWithLifecycle()
+    val systemDefault = stringResource(R.string.settings_system_default)
+    val selectedDeviceLabel = if (selectedDevice == null) systemDefault
         else inputDevices.firstOrNull { it.name == selectedDevice }?.label ?: selectedDevice
     var deviceExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { vm.refreshInputDevices() }
@@ -68,10 +78,11 @@ fun SettingsScreen(
         }.getOrDefault("—")
     }
 
-    val lameNotice by produceState(initialValue = "") {
+    // Read once; null = unavailable (resolved to a localized line at render time).
+    val lameNotice by produceState<String?>(initialValue = "") {
         value = runCatching {
             context.resources.openRawResource(R.raw.lame_notice).bufferedReader().use { it.readText() }
-        }.getOrDefault("LAME notice unavailable.")
+        }.getOrNull()
     }
 
     Column(
@@ -83,31 +94,30 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         ScreenHeader(
-            title = "Settings",
-            subtitle = "About · legal · data",
-            onBack = onBack,
+            title = stringResource(R.string.settings_title),
+            subtitle = stringResource(R.string.settings_subtitle),
         )
 
-        FieldGroup("About") {
+        FieldGroup(stringResource(R.string.settings_group_about)) {
             Text(
-                "Streamy",
+                stringResource(R.string.brand_name),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                "Broadcast console for SHOUTcast v2 sources.",
+                stringResource(R.string.settings_about_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Version $version",
+                stringResource(R.string.settings_version, version),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
-        FieldGroup("Input device") {
+        FieldGroup(stringResource(R.string.settings_group_input)) {
             ExposedDropdownMenuBox(
                 expanded = deviceExpanded,
                 onExpandedChange = { deviceExpanded = it },
@@ -116,6 +126,7 @@ fun SettingsScreen(
                     value = selectedDeviceLabel,
                     onValueChange = {},
                     readOnly = true,
+                    label = { Text(stringResource(R.string.settings_input_label)) },
                     singleLine = true,
                     shape = RoundedCornerShape(8.dp),
                     trailingIcon = {
@@ -141,7 +152,7 @@ fun SettingsScreen(
                     onDismissRequest = { deviceExpanded = false },
                 ) {
                     DropdownMenuItem(
-                        text = { Text("System default", style = MaterialTheme.typography.bodyMedium) },
+                        text = { Text(systemDefault, style = MaterialTheme.typography.bodyMedium) },
                         onClick = { vm.setInputDevice(null); deviceExpanded = false },
                     )
                     inputDevices.forEach { d ->
@@ -153,36 +164,64 @@ fun SettingsScreen(
                 }
             }
             Text(
-                "Selected mic applies on the next stream start. The device is matched by name " +
-                    "each session — replug/ reboot safe.",
+                stringResource(R.string.settings_input_hint),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
-        FieldGroup("Legal") {
+        FieldGroup(stringResource(R.string.settings_group_display)) {
+            // Whole row toggles (Switch has no own click handler) so the 48dp target is the
+            // row and TalkBack reads one "switch, on/off" node with its label.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = keepScreenOn,
+                        role = Role.Switch,
+                        onValueChange = vm::setKeepScreenOn,
+                    )
+                    .padding(vertical = 4.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        stringResource(R.string.settings_keep_screen_on),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        stringResource(R.string.settings_keep_screen_on_hint),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = keepScreenOn, onCheckedChange = null)
+            }
+        }
+
+        FieldGroup(stringResource(R.string.settings_group_legal)) {
             Text(
-                lameNotice,
+                lameNotice ?: stringResource(R.string.settings_lame_unavailable),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "Cleartext HTTP is enabled in debug builds for LAN dev servers. " +
-                    "Release builds restrict HTTP clients to TLS; the raw-socket source " +
-                    "protocol (SHOUTcast/Ultravox/Icecast) is unaffected.",
+                stringResource(R.string.settings_cleartext_note),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.tertiary,
             )
         }
 
-        FieldGroup("Data") {
+        FieldGroup(stringResource(R.string.settings_group_data)) {
             Text(
-                "${profiles.size} profile${if (profiles.size == 1) "" else "s"} stored on this device.",
+                pluralStringResource(R.plurals.settings_profiles_stored, profiles.size, profiles.size),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             JokoOutlineButton(
-                text = "Clear all profiles",
+                text = stringResource(R.string.settings_clear_all),
                 onClick = { pendingClear = true },
                 enabled = profiles.isNotEmpty(),
                 color = MaterialTheme.colorScheme.error,
@@ -194,11 +233,10 @@ fun SettingsScreen(
     if (pendingClear) {
         AlertDialog(
             onDismissRequest = { pendingClear = false },
-            title = { Text("Clear all profiles?") },
+            title = { Text(stringResource(R.string.settings_clear_title)) },
             text = {
                 Text(
-                    "This deletes every server profile on this device. The servers themselves " +
-                        "are not affected.",
+                    stringResource(R.string.settings_clear_body),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
@@ -208,7 +246,7 @@ fun SettingsScreen(
                     pendingClear = false
                 }) {
                     Text(
-                        "Clear",
+                        stringResource(R.string.action_clear),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -216,7 +254,7 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingClear = false }) {
-                    Text("Cancel", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.action_cancel), style = MaterialTheme.typography.labelLarge)
                 }
             },
         )

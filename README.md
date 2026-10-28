@@ -52,7 +52,20 @@ Reverse-engineered / live-verified against DNAS2 2.6.1 — see [`docs/plans/2026
 
 Requires Android SDK + NDK 27.0.12077973 + CMake 3.22.1 (JDK 17/21, AGP 8.7.3, Kotlin 2.0.21). APK: `app/build/outputs/apk/debug/app-debug.apk`.
 
-Release signing reads from gitignored `local.properties` (`streamy.keystore.file` / `.alias` / `.password`); unsigned release APKs can't install.
+Release signing reads from gitignored `local.properties` (`streamy.keystore.file` / `.alias` / `.password`, optional `.keyPassword` when it differs from the store password); unsigned release APKs can't install.
+
+### CI (GitHub Actions)
+
+`.github/workflows/android.yml` runs on every push/PR: unit tests → lint → debug APK → 16 KB page-alignment check, uploading the APK and reports as artifacts. On `master` and `v*` tags a signed release APK is also built (and attached to a GitHub Release for tags) — only when these repository secrets exist, otherwise the job skips:
+
+| Secret | Value |
+|---|---|
+| `STREAMY_KEYSTORE_BASE64` | `base64 -w0 streamy-release.jks` |
+| `STREAMY_KEYSTORE_PASSWORD` | store password |
+| `STREAMY_KEY_ALIAS` | key alias (default `streamy`) |
+| `STREAMY_KEY_PASSWORD` | key password, only if different from the store password |
+
+Live/instrumented tests don't run in CI (they need real server creds).
 
 ## Test against a real server
 

@@ -5,6 +5,8 @@ import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
+import android.util.Log
 import android.os.Environment
 import android.provider.MediaStore
 import java.io.File
@@ -66,6 +68,53 @@ object RecordingStorage {
         val file = File(dir, displayName)
         val fout = try { FileOutputStream(file) } catch (e: Throwable) { return null }
         return RecordingTarget(fout, file.absolutePath)
+    }
+
+    /**
+     * Publishes recordings left `IS_PENDING=1` by a process death mid-recording (OOM/force-stop
+     * skips the close that would flip the flag) — otherwise they stay invisible to every other
+     * app forever and MediaStore eventually purges them. Empty stubs are deleted instead.
+     *
+     * All recording happens in-process, so a pending item added before this process started
+     * cannot be in use. [processStartSec] (captured in Application.onCreate) fences off a
+     * recording the user starts while this sweep is still running on its background thread —
+     * strict `<`, so a same-second insert is left alone. Runs blocking; call off-main.
+     */
+    fun publishOrphans(context: Context, processStartSec: Long) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        val cr = context.contentResolver
+        val selection = "${MediaStore.Audio.Media.IS_PENDING}=1" +
+            " AND ${MediaStore.Audio.Media.DISPLAY_NAME} LIKE 'streamy-%'" +
+            " AND ${MediaStore.Audio.Media.DATE_ADDED} < $processStartSec"
+        val projection = arrayOf(MediaStore.Audio.Media._ID)
+        val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val ids = mutableListOf<Long>()
+        try {
+            // Pending rows are hidden from plain queries; opting in differs by release.
+            val cursor = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                cr.query(collection, projection, Bundle().apply {
+                    putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
+                    putInt(MediaStore.QUERY_ARG_MATCH_PENDING, MediaStore.MATCH_INCLUDE)
+                }, null)
+            } else {
+                @Suppress("DEPRECATION")
+                cr.query(MediaStore.setIncludePending(collection), projection, selection, null, null)
+            }
+            cursor?.use { c -> while (c.moveToNext()) ids += c.getLong(0) }
+        } catch (e: Throwable) {
+            Log.w("RecordingStorage", "orphan query failed", e); return
+        }
+        for (id in ids) {
+            val uri = android.content.ContentUris.withAppendedId(collection, id)
+            runCatching {
+                val size = cr.openFileDescriptor(uri, "r")?.use { it.statSize } ?: 0L
+                if (size > 0) {
+                    cr.update(uri, ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }, null, null)
+                } else {
+                    cr.delete(uri, null, null)
+                }
+            }.onFailure { Log.w("RecordingStorage", "orphan $id", it) }
+        }
     }
 
     private fun deleteAndNull(cr: ContentResolver, uri: Uri): RecordingTarget? {
