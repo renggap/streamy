@@ -114,7 +114,7 @@ jobs:
             echo "streamy.keystore.file=$RUNNER_TEMP/streamy-release.jks"
             echo "streamy.keystore.password=$KEYSTORE_PASSWORD"
             echo "streamy.keystore.alias=${KEY_ALIAS:-streamy}"
-            [ -n "$KEY_PASSWORD" ] && echo "streamy.keystore.keyPassword=$KEY_PASSWORD"
+            [ -n "$KEY_PASSWORD" ] && echo "streamy.keystore.keyPassword=$KEY_PASSWORD" || true
           } > local.properties
 
       - name: Skip (no signing secrets)
