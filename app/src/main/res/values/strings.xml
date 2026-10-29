@@ -23,6 +23,13 @@
     <string name="action_back">Back</string>
     <string name="action_open_settings">Settings</string>
 
+    <!-- In-app update (GitHub Releases) -->
+    <string name="update_dialog_title">Update available</string>
+    <string name="update_dialog_body">Streamy %1$s is available. Download and install?</string>
+    <string name="update_downloading">Downloading…</string>
+    <string name="update_download_failed">Download failed. Try again later.</string>
+    <string name="update_needs_install_permission">Allow installs from Streamy in Settings, then tap Update again.</string>
+
     <!-- Navigation + on-air banner -->
     <string name="nav_home">Home</string>
     <string name="nav_profiles">Profiles</string>

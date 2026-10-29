@@ -135,10 +135,26 @@ jobs:
 
       - name: Publish GitHub release
         if: env.KEYSTORE_BASE64 != '' && startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: app/build/outputs/apk/release/*.apk
-          generate_release_notes: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          VERSION_CODE=$(grep -m1 'versionCode' app/build.gradle.kts | tr -cd '[:digit:]')
+          VERSION_NAME=$(grep -m1 'versionName' app/build.gradle.kts | sed 's/.*"\(.*\)".*/\1/')
+          gh release create "$GITHUB_REF_NAME" "$APK" \
+            --title "Streamy $VERSION_NAME" --generate-notes
+          # update.json feeds the in-app updater (net/UpdateChecker.kt); the browser_download_url
+          # is only known after the asset exists, so fetch the release back and read it.
+          APK_URL=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" \
+            --jq ".assets[] | select(.name == \"app-release.apk\") | .browser_download_url")
+          cat > update.json <<EOF
+          {
+            "versionCode": $VERSION_CODE,
+            "versionName": "$VERSION_NAME",
+            "apkUrl": "$APK_URL"
+          }
+          EOF
+          gh release upload "$GITHUB_REF_NAME" update.json --clobber
 
       - name: Remove keystore
         if: always()

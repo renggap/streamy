@@ -18,6 +18,7 @@ import com.streamy.app.data.db.DatabaseHolder
 import com.streamy.app.data.db.AppDatabase
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.data.ProfileRepository
+import com.streamy.app.net.UpdateChecker
 import com.streamy.app.service.RecordState
 import com.streamy.app.service.ServiceController
 import com.streamy.app.service.StreamState
@@ -234,6 +235,12 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+        // Auto-update: silent check on startup. Any failure (offline, bad feed, same version)
+        // stays invisible — the dialog only appears when there is something to install.
+        viewModelScope.launch {
+            val info = UpdateChecker.fetchUpdate() ?: return@launch
+            if (UpdateChecker.isNewer(info)) _update.value = UpdateDialog(info)
+        }
     }
 
     // ---- Transient UI signals ----
@@ -249,6 +256,63 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     private val _permissionsNeeded = MutableStateFlow<List<String>>(emptyList())
     /** Non-empty → MainActivity should request these and call [onPermissionsResult]. */
     val permissionsNeeded: StateFlow<List<String>> = _permissionsNeeded.asStateFlow()
+
+    // ---- Auto-update ----
+
+    /** Dialog payload: a newer version is available on GitHub Releases. */
+    data class UpdateDialog(val info: UpdateChecker.UpdateInfo, val downloading: Boolean = false)
+
+    private val _update = MutableStateFlow<UpdateDialog?>(null)
+    val update: StateFlow<UpdateDialog?> = _update.asStateFlow()
+
+    fun dismissUpdate() {
+        _update.value = null
+    }
+
+    /** One in-flight download guard: double-tap on Update must not stack downloads. */
+    private var updateDownloading = false
+
+    /**
+     * Download the APK then emit an event the Activity executes (starting activities is
+     * Activity work, not VM work). The UI layer reads [pendingInstall] once and clears it.
+     * Failure surfaces as the standard snackbar; the dialog stays up so the user can retry.
+     */
+    private val _pendingInstall = MutableStateFlow<java.io.File?>(null)
+    val pendingInstall: StateFlow<java.io.File?> = _pendingInstall.asStateFlow()
+
+    fun downloadUpdate(context: Context) {
+        val dialog = _update.value ?: return
+        if (updateDownloading) return
+        updateDownloading = true
+        _update.value = dialog.copy(downloading = true)
+        viewModelScope.launch {
+            val apk = UpdateChecker.downloadApk(context, dialog.info)
+            updateDownloading = false
+            if (apk == null) {
+                _update.value = dialog.copy(downloading = false)
+                message(R.string.update_download_failed)
+            } else {
+                _update.value = null
+                _pendingInstall.value = apk
+            }
+        }
+    }
+
+    fun consumePendingInstall() {
+        _pendingInstall.value = null
+    }
+
+    /**
+     * "Install unknown apps" grant missing: park the installer intent and tell the user via
+     * snackbar with a Settings deep link. When they return and tap Update again the (cached)
+     * APK re-downloads instantly and installs.
+     */
+    fun onInstallPermissionNeeded() {
+        _userMessage.value = UserMessage(
+            UiText.Res(R.string.update_needs_install_permission),
+            action = UserAction.OpenInstallPermissions,
+        )
+    }
 
     /** Profile id awaiting permission grant to start. Cleared on grant or abort. */
     private var pendingStartProfileId: Long? = null

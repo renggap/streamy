@@ -287,9 +287,19 @@ class StreamTransportBackoffTest {
         }
     }
 
+    // Predicates iterate lists the transport thread appends to; a synchronizedList only
+    // guards individual calls, so iteration itself can still throw ConcurrentModification
+    // under load. Snapshot inside synchronized on the callers' own list — the helper just
+    // retries, never fails, on any transient exception.
     private fun waitUntil(cond: () -> Boolean, timeoutMs: Long = 2_000) {
         val deadline = System.currentTimeMillis() + timeoutMs
-        while (!cond()) {
+        while (true) {
+            val met = try {
+                cond()
+            } catch (e: ConcurrentModificationException) {
+                false // writer appended mid-iteration; re-read next tick
+            }
+            if (met) return
             check(System.currentTimeMillis() < deadline) { "condition not met within ${timeoutMs}ms" }
             Thread.sleep(5)
         }

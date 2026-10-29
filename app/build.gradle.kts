@@ -9,16 +9,20 @@ import java.util.Properties
 
 android {
     namespace = "com.streamy.app"
-    compileSdk = 35
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     defaultConfig {
         applicationId = "com.streamy.app"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 12
         versionName = "1.11"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // In-app update feed (GitHub Release asset written by CI). Kept in BuildConfig so
+        // tests can pin a fixture and a fork can override without touching code.
+        buildConfigField("String", "UPDATE_FEED_URL", "\"https://github.com/renggap/streamy/releases/latest/download/update.json\"")
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
@@ -116,6 +120,9 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
+    // JVM tests run against the mockable android.jar whose org.json methods throw
+    // "not mocked" — supply the real one (test-only, matches the Android copy).
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.truth)

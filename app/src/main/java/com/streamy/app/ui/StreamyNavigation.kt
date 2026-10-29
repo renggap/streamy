@@ -1,5 +1,6 @@
 package com.streamy.app.ui
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +36,9 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -71,6 +76,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.streamy.app.R
 import com.streamy.app.data.db.ProfileEntity
+import com.streamy.app.net.UpdateChecker
 import com.streamy.app.service.StreamState
 
 /*
@@ -154,16 +160,27 @@ fun StreamyNavigation(
             duration = if (action != null) SnackbarDuration.Long else SnackbarDuration.Short,
         )
         vm.consumeMessage()
-        if (result == SnackbarResult.ActionPerformed && action == UserAction.OpenAppSettings) {
-            // Permanently denied mic: the system dialog won't show again, so the only way
-            // forward is the app's settings page. runCatching: some OEM builds strip it.
-            runCatching {
-                context.startActivity(
-                    Intent(
-                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.fromParts("package", context.packageName, null),
-                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
+        if (result == SnackbarResult.ActionPerformed && action != null) {
+            when (action) {
+                UserAction.OpenAppSettings -> runCatching {
+                    // Permanently denied mic: the system dialog won't show again, so the only way
+                    // forward is the app's settings page.
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.fromParts("package", context.packageName, null),
+                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+                UserAction.OpenInstallPermissions -> runCatching {
+                    // Android 8+: the per-app "install unknown apps" toggle.
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.fromParts("package", context.packageName, null),
+                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
             }
         }
     }
@@ -253,7 +270,71 @@ fun StreamyNavigation(
                 .statusBarsPadding()
                 .padding(top = 8.dp),
         ) { data -> Snackbar(snackbarData = data) }
+
+        // Update dialog over every screen; the download completes into the system installer
+        // (pendingInstall effect below hands the APK to the package installer).
+        val update by vm.update.collectAsStateWithLifecycle()
+        update?.let { dialog ->
+            UpdateDialog(
+                dialog = dialog,
+                onConfirm = { vm.downloadUpdate(context) },
+                onDismiss = vm::dismissUpdate,
+            )
+        }
+
+        // APK landed: open the system package installer. The user confirms there; on return
+        // the app is either updated or unchanged — nothing else to do either way.
+        val pendingInstall by vm.pendingInstall.collectAsStateWithLifecycle()
+        LaunchedEffect(pendingInstall) {
+            val apk = pendingInstall ?: return@LaunchedEffect
+            vm.consumePendingInstall()
+            val intent = UpdateChecker.installIntent(context, apk)
+            // canRequestPackageInstalls is API 26+; below it the REQUEST_INSTALL_PACKAGES
+            // manifest grant covers installs, so only gate on 26+.
+            val canInstall = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O ||
+                context.packageManager.canRequestPackageInstalls()
+            if (canInstall) {
+                runCatching { context.startActivity(intent) }
+            } else {
+                // Android 8+ requires the "install unknown apps" grant; deep-link to the
+                // toggle so the APK (still cached) installs right after the user returns.
+                vm.onInstallPermissionNeeded()
+            }
+        }
     }
+}
+
+/** "Update available" → download → hand to the system package installer. */
+@Composable
+private fun UpdateDialog(
+    dialog: StreamyViewModel.UpdateDialog,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = if (dialog.downloading) ({}) else onDismiss,
+        title = { Text(stringResource(R.string.update_dialog_title)) },
+        text = {
+            if (dialog.downloading) {
+                Column {
+                    Text(stringResource(R.string.update_downloading))
+                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp))
+                }
+            } else {
+                Text(stringResource(R.string.update_dialog_body, dialog.info.versionName))
+            }
+        },
+        confirmButton = {
+            if (!dialog.downloading) {
+                TextButton(onClick = onConfirm) { Text(stringResource(R.string.action_update)) }
+            }
+        },
+        dismissButton = {
+            if (!dialog.downloading) {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            }
+        },
+    )
 }
 
 /**

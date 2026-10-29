@@ -25,6 +25,9 @@ sealed interface UiText {
 enum class UserAction(@StringRes val labelRes: Int) {
     /** Deep-link to this app's system settings page (permanently denied mic permission). */
     OpenAppSettings(R.string.action_open_settings),
+
+    /** Open the system "install unknown apps" page (user must grant before the APK can install). */
+    OpenInstallPermissions(R.string.action_open_settings),
 }
 
 /** One-shot snackbar payload surfaced via [StreamyViewModel.userMessage]. */
