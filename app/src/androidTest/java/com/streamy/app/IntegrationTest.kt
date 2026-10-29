@@ -91,7 +91,7 @@ class IntegrationTest {
         ServiceController.start(ctx, profileId)
 
         val service = awaitBoundService(timeoutMs = 15_000)
-        awaitState(service, com.streamy.app.service.StreamState.Live, timeoutMs = 20_000)
+        awaitState(service, timeoutMs = 20_000)
 
         // let audio flow for a few seconds
         Thread.sleep(6_000)
@@ -120,17 +120,18 @@ class IntegrationTest {
         return bound!!
     }
 
-    private fun awaitState(service: StreamService, target: com.streamy.app.service.StreamState, timeoutMs: Long) {
+    private fun awaitState(service: StreamService, timeoutMs: Long) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             val s = service.state.value
-            if (s == target) return
+            // Live is a data class (droppedFrames payload): match on type, not equality.
+            if (s is com.streamy.app.service.StreamState.Live) return
             if (s is com.streamy.app.service.StreamState.Error) {
-                throw AssertionError("service entered Error state: ${s.reason} before reaching $target")
+                throw AssertionError("service entered Error state: ${s.reason} before reaching Live")
             }
             Thread.sleep(300)
         }
-        throw AssertionError("service never reached $target within ${timeoutMs}ms (last=${service.state.value})")
+        throw AssertionError("service never reached Live within ${timeoutMs}ms (last=${service.state.value})")
     }
 
     private fun statsField(tag: String): String? = try {

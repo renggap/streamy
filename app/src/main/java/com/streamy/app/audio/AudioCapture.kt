@@ -4,6 +4,7 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.annotation.SuppressLint
 import android.util.Log
 
 /**
@@ -51,6 +52,8 @@ class AudioCapture(
      * An exception thrown by [onFrame] ends capture (logged) instead of escaping the daemon
      * thread — an uncaught throw on `streamy-audio` would kill the whole process mid-broadcast.
      */
+    /** RECORD_AUDIO is checked by the callers' permission flow before the service starts. */
+    @SuppressLint("MissingPermission")
     fun start(onFrame: (ShortArray) -> Boolean) {
         val minBuf = AudioRecord.getMinBufferSize(
             sampleRateHz, channelConfig, AudioFormat.ENCODING_PCM_16BIT
