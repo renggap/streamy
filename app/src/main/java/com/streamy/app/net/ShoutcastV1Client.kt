@@ -6,7 +6,6 @@ import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
-import java.net.URLEncoder
 import kotlin.concurrent.thread
 
 /**
@@ -173,6 +172,6 @@ class ShoutcastV1Client(
             return if (u.isBlank()) p else "$u:$p"
         }
 
-        private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+        private fun enc(s: String) = WireSafety.urlEncode(s)
     }
 }

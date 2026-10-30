@@ -6,7 +6,6 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.net.URLEncoder
 import kotlin.concurrent.thread
 
 /**
@@ -240,7 +239,7 @@ class IcecastSourceClient(
 
         /** Pure: the `/admin/metadata` update path for [mount]. */
         fun adminMetadataPath(mount: String, title: String): String =
-            "/admin/metadata?mode=updinfo&charset=UTF-8&mount=" + URLEncoder.encode(mount, "UTF-8") +
-                "&song=" + URLEncoder.encode(title, "UTF-8")
+            "/admin/metadata?mode=updinfo&charset=UTF-8&mount=" + WireSafety.urlEncode(mount) +
+                "&song=" + WireSafety.urlEncode(title)
     }
 }

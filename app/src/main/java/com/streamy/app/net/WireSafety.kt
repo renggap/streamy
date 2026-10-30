@@ -1,5 +1,7 @@
 package com.streamy.app.net
 
+import java.net.URLEncoder
+
 /**
  * Shared sanitizers for values that cross a wire protocol boundary as part of a text frame
  * (Ultravox messages, Icecast HTTP headers, ICY inline metadata). User-controlled strings
@@ -32,6 +34,16 @@ object WireSafety {
         if (Character.isHighSurrogate(value[end - 1]) && Character.isLowSurrogate(value[end])) end--
         return value.substring(0, end)
     }
+
+    /**
+     * Canonical percent-encoding for a query-parameter value: [URLEncoder] form encoding, with
+     * spaces as `%20` — NEVER `+`. sc_trans's Weblet (SHOUTcast v1 DJ title updates) percent-decodes
+     * but keeps a literal `+`, so a form-encoded title aired as "Kajian+Pagi" instead of
+     * "Kajian Pagi" (live-proven 2026-10-31 against TRANSCast 2.0.0.54). Harmless for handlers
+     * that do form-decode (`%20` is a space everywhere), so this is safe for the Icecast/Liquidsoap
+     * `/admin/metadata` path too.
+     */
+    fun urlEncode(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
     /**
      * Parse the numeric HTTP status code out of a status line like `HTTP/1.0 200 OK`.

@@ -37,7 +37,9 @@ class PlainHttpTest {
     }
 
     @Test fun icecast_admin_metadata_path_is_url_encoded() {
+        // Spaces are %20, never `+` (form encoding): harbor/sc_trans title handlers keep a
+        // literal `+` — same live finding as ShoutcastV1Client.adminPath.
         assertThat(IcecastSourceClient.adminMetadataPath("/", "Kajian & Tanya Jawab"))
-            .isEqualTo("/admin/metadata?mode=updinfo&charset=UTF-8&mount=%2F&song=Kajian+%26+Tanya+Jawab")
+            .isEqualTo("/admin/metadata?mode=updinfo&charset=UTF-8&mount=%2F&song=Kajian%20%26%20Tanya%20Jawab")
     }
 }

@@ -70,8 +70,10 @@ class ShoutcastV1ClientTest {
     }
 
     @Test fun admin_path_carries_the_dj_login_and_encoded_title() {
+        // Spaces are %20, never `+`: sc_trans's Weblet decodes percent-escapes but keeps a
+        // literal `+` (live-proven 2026-10-31: `song=Kajian+Pagi` aired as "Kajian+Pagi").
         assertThat(ShoutcastV1Client.adminPath("madiundj", "p&w", "Kajian Pagi"))
-            .isEqualTo("/admin.cgi?mode=updinfo&pass=madiundj%3Ap%26w&song=Kajian+Pagi")
+            .isEqualTo("/admin.cgi?mode=updinfo&pass=madiundj%3Ap%26w&song=Kajian%20Pagi")
         assertThat(ShoutcastV1Client.adminPath("", "pw", "t")).isEqualTo("/admin.cgi?mode=updinfo&pass=pw&song=t")
     }
 
@@ -103,7 +105,7 @@ class ShoutcastV1ClientTest {
                 c.close()
                 source.join(3_000)
 
-                assertThat(requestLine.get()).isEqualTo("GET /admin.cgi?mode=updinfo&pass=dj%3Apw&song=Live+Show HTTP/1.0")
+                assertThat(requestLine.get()).isEqualTo("GET /admin.cgi?mode=updinfo&pass=dj%3Apw&song=Live%20Show HTTP/1.0")
             }
         }
     }

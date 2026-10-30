@@ -35,3 +35,33 @@ Users saw no title change on centova1 (v1) or on a Liquidsoap server (Icecast-st
 - Fix: `net/PlainHttp` sends both updates over a raw socket (the source password already goes in
   the clear on the source socket), only while logged in, and replays the last title after every
   connect — a title typed before going live used to hit the admin endpoint before the mount existed.
+
+## Follow-up: the v1 title path on real sc_trans (2026-10-31, local live rig)
+
+"Title Updated" is NOT a fake ACK — reproduced end-to-end with TRANSCast 2.0.0.54 (`sc_trans` DJ
+port → `sc_serv` output) on a local rig: `GET <djport>/admin.cgi?mode=updinfo&pass=djlogin:djpassword&song=…`
+logs `[TITLEUPDATE] Receiving DJ metadata … / Relaying DJ metadata` and the title DOES reach the
+DNAS `SONGTITLE` — but only after sc_trans's DJ "Timed content" audio-pipeline delay (~15 s),
+synced to the (equally delayed) DJ audio. That delay is why the earlier field probe "saw no change
+within those seconds"; checking `/stats` seconds after an update proves nothing here.
+
+What WAS broken in the app (fixed now): `URLEncoder` form-encoding put `+` for spaces in `song=`.
+The Weblet percent-decodes but keeps `+` literally — live-proven: `song=Kajian+Pagi` aired as
+**"Kajian+Pagi"**. Every real title has spaces, so titles landed mangled. `WireSafety.urlEncode`
+now emits `%20` (the pre-Ultravox `MetadataClient` had this right; the regression lost it).
+Verified after the fix with the real `ShoutcastV1Client` (`ShoutcastV1ClientLiveTest`): the typed
+title airs verbatim. Same encoding applied to the Icecast `/admin/metadata` path.
+
+Other rig findings (no app action needed, but they explain field reports):
+
+- Inline ICY `StreamTitle` blocks in a v1 DJ's MP3 stream are IGNORED by sc_trans (no TITLEUPDATE
+  log, no effect) — the Weblet `admin.cgi` GET is the only DJ title channel there.
+- The working `admin.cgi` endpoint is the **djport base** port (the "panel port" the app already
+  uses as `adminPort`); sc_trans's own `adminport` Weblet answers `Resource Not Found` for it.
+- HTTP GETs aimed at sc_trans's DJ *listener* port (djport+1) are parsed as a bogus login and
+  dropped (production logs: `[DJPROTOCOLSHOUTCAST] Login denied from GET …`) — never send title
+  updates to the v1 listener port.
+- With `encoder_1=aacp` the DJ never takes over at all (the playlist keeps decoding and keeps
+  airing its own titles) — same "DJ override never airs" finding as the streamy-panel djMux; with
+  `encoder_1=mp3` (licensed) the DJ takes over and titles land. A DJ show that "connects fine but
+  airs nothing" on a sc_trans station is this server-side limitation, not the app.
