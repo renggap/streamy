@@ -15,6 +15,7 @@ Android app that broadcasts **live speech** from the microphone to a **SHOUTcast
 - **Admin-free now-playing metadata** — in-stream title updates via Ultravox `0x902` XML metadata. **No DNAS admin user/password required**; just type and tap UPDATE while live.
 - **Real oscilloscope VU meter** — the actual mic PCM waveform (pre-encoder, RMS + decimated at ~30 fps) drawn as a glowing on-air-red trace with phosphor afterglow.
 - **Bitrate / sample-rate / channels** as compact dropdowns; codec toggle (MP3 active).
+- **Light / dark theme** — Settings → Display → Theme: Light (default), Dark, or Follow system.
 - **Multiple server profiles** (Room) — host, port, stream id, password, mount, per-profile audio settings.
 - **Hallmark UI** — "late-night tally-light" theme (deep ink, on-air red, signal green, monospace readout), custom app icon + monochrome notification icon.
 - **Robust pipeline** — bounded drop-newest queue, idempotent teardown, setup/shutdown race guards, leak-free sockets/locks.

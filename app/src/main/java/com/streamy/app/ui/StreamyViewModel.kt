@@ -18,6 +18,7 @@ import com.streamy.app.data.db.DatabaseHolder
 import com.streamy.app.data.db.AppDatabase
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.data.ProfileRepository
+import com.streamy.app.data.ThemeMode
 import com.streamy.app.net.UpdateChecker
 import com.streamy.app.service.RecordState
 import com.streamy.app.service.ServiceController
@@ -369,6 +370,15 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     fun setKeepScreenOn(on: Boolean) {
         _keepScreenOn.value = on
         uiPrefs.edit().putBoolean(KEY_KEEP_SCREEN_ON, on).apply()
+    }
+
+    /** Theme preference (Settings → Display). Read at construction so the first frame is right. */
+    private val _themeMode = MutableStateFlow(ThemeMode.parse(uiPrefs.getString(KEY_THEME_MODE, null)))
+    val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    fun setThemeMode(mode: ThemeMode) {
+        _themeMode.value = mode
+        uiPrefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
     }
 
     // ---- Mic settings ----
@@ -727,6 +737,7 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         private const val KEY_SELECTED_PROFILE = "selected_profile_id"
         private const val KEY_STREAM_PROFILE = "stream_profile_id"
         private const val KEY_KEEP_SCREEN_ON = "keep_screen_on_live"
+        private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_NOTIF_ASKED = "notifications_asked"
         private const val KEY_NOW_PLAYING = "now_playing_title"
 

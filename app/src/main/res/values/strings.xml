@@ -171,6 +171,10 @@
     <string name="settings_system_default">System default</string>
     <string name="settings_input_hint">The selected mic applies the next time you start. It is matched by name each session, so unplugging or rebooting is safe.</string>
     <string name="settings_group_display">Display</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_system">Follow system</string>
     <string name="settings_keep_screen_on">Keep screen on while live</string>
     <string name="settings_keep_screen_on_hint">The screen stays awake only while you are on air.</string>
     <string name="settings_group_legal">Legal</string>

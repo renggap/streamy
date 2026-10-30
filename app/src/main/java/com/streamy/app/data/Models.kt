@@ -24,6 +24,27 @@ enum class DjProtocol {
     }
 }
 
+/**
+ * App theme preference (Settings → Display). LIGHT is the default: the app's design is
+ * daylight-first, so existing users keep the look they have; DARK and SYSTEM are opt-in.
+ */
+enum class ThemeMode {
+    LIGHT, DARK, SYSTEM;
+
+    /** Whether to draw the dark scheme, given the device's current night-mode state. */
+    fun isDark(systemDark: Boolean): Boolean = when (this) {
+        LIGHT -> false
+        DARK -> true
+        SYSTEM -> systemDark
+    }
+
+    companion object {
+        /** Parse a stored value; null/blank/unrecognized → [LIGHT] (the default). */
+        fun parse(s: String?): ThemeMode =
+            runCatching { valueOf(s.orEmpty().trim().uppercase()) }.getOrDefault(LIGHT)
+    }
+}
+
 /** Bitrate + sample-rate + channels resolved for an encode session. */
 data class AudioConfig(
     val codec: Codec,
