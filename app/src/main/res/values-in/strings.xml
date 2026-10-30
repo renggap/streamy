@@ -129,8 +129,8 @@
     <string name="edit_group_server">Server</string>
     <string name="edit_group_audio">Audio</string>
     <string name="edit_mode">Mode</string>
-    <string name="edit_azuracast">Login DJ gaya Icecast (AzuraCast, Centova)</string>
-    <string name="edit_azuracast_hint">Centang untuk akun DJ AzuraCast dan Centova, atau jika koneksi timeout. Biarkan kosong hanya untuk port sc_trans SHOUTcast yang memakai Ultravox.</string>
+    <string name="edit_azuracast">Login DJ gaya Icecast (AzuraCast, Liquidsoap)</string>
+    <string name="edit_azuracast_hint">Centang untuk port DJ AzuraCast atau Liquidsoap. Jika tidak dicentang, Streamy otomatis mencoba SHOUTcast v1 (seperti di panel Centova), lalu Ultravox.</string>
     <string name="edit_name">Nama</string>
     <string name="edit_name_placeholder">Stasiun saya</string>
     <string name="edit_host">Host</string>
@@ -218,7 +218,7 @@
     <string name="err_server_rejected">Server menolak koneksi.</string>
     <string name="err_unknown_host">Alamat server tidak ditemukan. Periksa nama host.</string>
     <string name="err_conn_refused">Server menolak koneksi. Periksa port.</string>
-    <string name="err_handshake_timeout">Server tersambung tetapi tidak menjawab handshake SHOUTcast. Untuk akun DJ (Centova, AzuraCast), centang \"Login DJ gaya Icecast\" di profil.</string>
+    <string name="err_handshake_timeout">Server tersambung tetapi tidak menjawab handshake SHOUTcast. Jika ini port DJ AzuraCast atau Liquidsoap, centang \"Login DJ gaya Icecast\" di profil.</string>
     <string name="err_timeout">Server tidak merespons tepat waktu.</string>
     <string name="err_no_network">Tidak ada koneksi jaringan.</string>
     <string name="err_generic">Siaran berhenti secara tak terduga.</string>

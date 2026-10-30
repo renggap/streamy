@@ -9,7 +9,7 @@ Android app that broadcasts **live speech** from the microphone to a **SHOUTcast
 - **Live speech → SHOUTcast v2 (DNAS2)** — captures the mic, encodes, and streams over the real **Ultravox 2.1** source protocol (live-verified against DNAS2 2.6.1).
 - **MP3 encoding** via `libmp3lame` (NDK/JNI) — bitrates **16 / 24 / 48 / 64 / 96 / 128 / 192 kbps**, sample rates 16 / 22.05 / 44.1 / 48 kHz, mono/stereo. (AAC encoding is implemented via `MediaCodec` but disabled in the UI for v1.0.0 — being revisited.)
 - **Background streaming** — foreground service (`microphone` type) holding a `PARTIAL_WAKE_LOCK` + `WifiLock`; survives screen-off and backgrounding. `START_STICKY` reconnects after a process kill.
-- **Two broadcast modes** — **SOURCE** (Streamy is the source: push encoded audio straight to DNAS2 `sc_serv`) or **DJ** (push to the Transcoder `sc_trans` on its `djport2`; sc_trans re-encodes). DJ mode speaks either Ultravox or the HTTP ICE/1.0 source protocol (Icecast-style `SOURCE <mount>` + Basic auth). Selected per profile.
+- **Two broadcast modes** — **SOURCE** (Streamy is the source: push encoded audio straight to DNAS2 `sc_serv`) or **DJ** (push to the Transcoder `sc_trans` on its `djport2`; sc_trans re-encodes). DJ mode speaks the HTTP ICE/1.0 source protocol (Icecast-style `SOURCE <mount>` + Basic auth) for AzuraCast / Liquidsoap, or — the default — SHOUTcast: it tries a v1 login on the entered port + 1 (what Centova sc_trans2 panels advertise) and falls back to Ultravox on the entered port. Selected per profile.
 - **Standalone MP3 recorder** — `RecordService` records mic → local MP3 without broadcasting (direct MP3 pass-through or AAC→MP3 transcode); can run concurrently with a live stream.
 - **Auto-reconnect** with exponential backoff (1→2→5→10→20s, 10 attempts) and an immediate **Stop-reconnect** control to abort during Connecting/Reconnecting/Error.
 - **Admin-free now-playing metadata** — in-stream title updates via Ultravox `0x902` XML metadata. **No DNAS admin user/password required**; just type and tap UPDATE while live.
@@ -90,7 +90,7 @@ streamy.test.password=...
 ```
 app/src/main/java/com/streamy/app/
   audio/    AudioCapture, Encoder, AacEncoder, Mp3Encoder (NDK), AudioPipeline, LevelTap/LevelFeed
-  net/      UvoxClient (Ultravox 2.1), UvoxXtea, IcecastSourceClient (ICE/1.0), SourceClient, StreamTransport, ProtocolException
+  net/      UvoxClient (Ultravox 2.1), UvoxXtea, ShoutcastV1Client (v1 DJ), FallbackSourceClient, IcecastSourceClient (ICE/1.0), SourceClient, StreamTransport, ProtocolException
   service/  StreamService (stream), RecordService (standalone recorder), StreamState/RecordState, ServiceController
   data/     Room: ProfileEntity/Dao/AppDatabase, AudioConfig, BroadcastMode/DjProtocol, ProfileRepository
   ui/       Theme, StreamyViewModel, Home, VuMeter, BitrateChooser, profiles, settings

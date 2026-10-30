@@ -35,7 +35,9 @@ import com.streamy.app.data.ProfileRepository
 import com.streamy.app.data.db.DatabaseHolder
 import com.streamy.app.data.db.ProfileEntity
 import com.streamy.app.R
+import com.streamy.app.net.FallbackSourceClient
 import com.streamy.app.net.IcecastSourceClient
+import com.streamy.app.net.ShoutcastV1Client
 import com.streamy.app.net.SourceClient
 import com.streamy.app.net.StreamTransport
 import com.streamy.app.net.TransportState
@@ -200,13 +202,29 @@ class StreamService : Service() {
                     )
                 } else {
                     when (DjProtocol.parse(profile.djProtocol)) {
-                        DjProtocol.ULTRAVOX -> UvoxClient(
-                            host = profile.host, port = djPort, sid = profile.sid,
-                            password = profile.password,
-                            mime = if (cfg.codec == Codec.AAC) "audio/aacp" else "audio/mpeg",
-                            sampleRateHz = cfg.sampleRateHz, channels = if (cfg.mono) 1 else 2,
-                            djUser = profile.djUser,
-                        )
+                        DjProtocol.ULTRAVOX -> {
+                            val uvox = UvoxClient(
+                                host = profile.host, port = djPort, sid = profile.sid,
+                                password = profile.password,
+                                mime = if (cfg.codec == Codec.AAC) "audio/aacp" else "audio/mpeg",
+                                sampleRateHz = cfg.sampleRateHz, channels = if (cfg.mono) 1 else 2,
+                                djUser = profile.djUser,
+                            )
+                            // SHOUTcast DJ ports come in two styles, both live-verified: Centova /
+                            // sc_trans2 panels advertise a v1 login whose source port is the listed
+                            // port + 1, others speak only Ultravox on the listed port. Try v1 first,
+                            // then Ultravox, so the DJ just types what their panel shows. v1 is
+                            // MP3-only and needs a port + 1 that exists.
+                            if (cfg.codec == Codec.MP3 && djPort < 65_535) {
+                                FallbackSourceClient(
+                                    primary = ShoutcastV1Client(
+                                        host = profile.host, port = djPort + 1,
+                                        user = profile.djUser ?: "", password = profile.password,
+                                    ),
+                                    fallback = uvox,
+                                )
+                            } else uvox
+                        }
                         DjProtocol.ICECAST -> {
                             // Icecast source mounts only accept MP3 here — coerce AAC defensively
                             // (VM + form already block it; this is the last line of defense).
