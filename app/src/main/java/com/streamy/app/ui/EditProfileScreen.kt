@@ -16,6 +16,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -32,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -312,10 +315,14 @@ fun EditProfileScreen(
                 visualTransformation = if (showPassword) VisualTransformation.None
                 else PasswordVisualTransformation(),
                 trailing = {
-                    TextButton(onClick = { showPassword = !showPassword }) {
-                        Text(
-                            stringResource(if (showPassword) R.string.edit_password_hide else R.string.edit_password_show),
-                            style = MaterialTheme.typography.labelLarge,
+                    // An icon, not a text button: the long label ("Tampilkan kata sandi")
+                    // squeezed the input to nothing. The label lives on as the a11y name.
+                    IconButton(onClick = { showPassword = !showPassword }) {
+                        Icon(
+                            painterResource(if (showPassword) R.drawable.ic_visibility_off else R.drawable.ic_visibility),
+                            contentDescription = stringResource(
+                                if (showPassword) R.string.edit_password_hide else R.string.edit_password_show,
+                            ),
                         )
                     }
                 },

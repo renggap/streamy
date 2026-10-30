@@ -143,7 +143,11 @@ class StreamService : Service() {
                     synchronized(this) { shuttingDown = false }   // fresh start: let fail() tear down
                     fail("profile_missing")
                 } else {
-                    startWithProfile(id, intent.getStringExtra(EXTRA_DEVICE_NAME))
+                    startWithProfile(
+                        id,
+                        intent.getStringExtra(EXTRA_DEVICE_NAME),
+                        intent.getStringExtra(EXTRA_TITLE),
+                    )
                 }
             }
             ACTION_STOP -> acknowledgeStop()
@@ -161,7 +165,7 @@ class StreamService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startWithProfile(profileId: Long, deviceName: String?) {
+    private fun startWithProfile(profileId: Long, deviceName: String?, initialTitle: String?) {
         // Fresh start: clear any prior shutdown so a subsequent teardown actually runs
         // (matters when the bound service instance is reused across Stop -> Start).
         synchronized(this) { shuttingDown = false }
@@ -238,6 +242,9 @@ class StreamService : Service() {
                     encoder = enc
                     client = source
                     liveCfg = cfg
+                    // Seed the carried-over title off the lock: both clients keep it as their
+                    // last title and announce it once the handshake completes (and on reconnect).
+                    if (initialTitle != null) scope.launch { source.updateNowPlaying(initialTitle) }
                     _state.value = StreamState.Connecting
                     val t = StreamTransport(
                         scope = scope,
