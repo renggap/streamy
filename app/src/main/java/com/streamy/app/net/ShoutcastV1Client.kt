@@ -6,6 +6,8 @@ import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
+import java.net.URLEncoder
+import kotlin.concurrent.thread
 
 /**
  * SHOUTcast **v1** source client — the legacy DJ login sc_trans2 exposes and Centova panels
@@ -17,14 +19,17 @@ import java.net.SocketTimeoutException
  * header lines + a blank line, then raw MP3 bytes. No framing, no cipher.
  *
  * [port] is the port this client DIALS — v1 sources connect to the panel/listener port + 1;
- * the caller does that arithmetic. No in-stream now-playing: v1 metadata needs the server's
- * admin password, which a DJ doesn't have, so [updateNowPlaying] stays the default no-op.
+ * the caller does that arithmetic. Now-playing goes out of band, the classic v1 way: an HTTP
+ * `GET /admin.cgi?mode=updinfo&pass=djlogin:djpassword&song=…` to [adminPort] (the panel port).
+ * Live-verified on centova1: sc_trans2's Weblet on 8092 answers `Title Updated` with the DJ's
+ * own login — no server admin password needed. (Basic auth instead of `pass=` → 404.)
  */
 class ShoutcastV1Client(
     private val host: String,
     private val port: Int,
     private val user: String,
     private val password: String,
+    private val adminPort: Int = port - 1,
 ) : SourceClient {
 
     private val stateLock = Any()
@@ -33,6 +38,9 @@ class ShoutcastV1Client(
     // Latched by close(): a Stop mid-handshake must abort it, not let it finish into an
     // authenticated source that holds the DJ slot until the server times it out.
     @Volatile private var closed = false
+    // Last now-playing title, pushed again after every successful login so a reconnect (or a
+    // title set while still connecting) still reaches the server.
+    @Volatile private var lastTitle: String? = null
 
     override fun connect(bitrateKbps: Int, name: String, genre: String) {
         try { socket?.close() } catch (_: Throwable) {}
@@ -95,6 +103,8 @@ class ShoutcastV1Client(
                 if (closed) throw IOException("client closed")
                 out = o
             }
+            // Off the transport thread: a slow admin port must not hold up the audio start.
+            lastTitle?.let { t -> thread(isDaemon = true, name = "v1-title") { pushTitle(t) } }
         } catch (e: Throwable) {
             try { s.close() } catch (_: Throwable) {}
             socket = null; out = null
@@ -107,6 +117,18 @@ class ShoutcastV1Client(
         val o = out ?: throw IOException("client closed")
         o.write(frame)
         o.flush()
+    }
+
+    /** Out-of-band title update. Best-effort; only while logged in (the server applies it to the DJ). */
+    override fun updateNowPlaying(title: String) {
+        val safe = WireSafety.headerValue(title)
+        lastTitle = safe
+        pushTitle(safe)
+    }
+
+    private fun pushTitle(title: String) {
+        if (out == null) return   // not logged in yet: replayed after the handshake
+        runCatching { PlainHttp.get(host, adminPort, adminPath(user, password, title)) }
     }
 
     override fun close() {
@@ -139,6 +161,18 @@ class ShoutcastV1Client(
 
         /** Pure: the v1 login line — `user:password`, or the bare password when there's no user. */
         fun loginLine(user: String, password: String): String =
-            (if (user.isBlank()) password else "$user:$password") + "\r\n"
+            credential(user, password) + "\r\n"
+
+        /** Pure: the admin.cgi title-update path; `pass` is the same credential as the login. */
+        fun adminPath(user: String, password: String, title: String): String =
+            "/admin.cgi?mode=updinfo&pass=" + enc(credential(user, password)) + "&song=" + enc(title)
+
+        private fun credential(user: String, password: String): String {
+            val u = WireSafety.stripControlChars(user)
+            val p = WireSafety.stripControlChars(password)
+            return if (u.isBlank()) p else "$u:$p"
+        }
+
+        private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
     }
 }

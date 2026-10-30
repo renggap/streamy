@@ -4,11 +4,10 @@ import android.util.Base64
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
-import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.net.URL
 import java.net.URLEncoder
+import kotlin.concurrent.thread
 
 /**
  * Icecast / Liquidsoap-harbor **HTTP source** client — the second DJ sub-mode (the first being
@@ -20,9 +19,10 @@ import java.net.URLEncoder
  *
  * Now-playing is pushed two ways: (1) **ICY inline metadata** — the source declares
  * `icy-metaint` and interleaves `StreamTitle='...'\0` blocks every N audio bytes, which Icecast
- * and harbor parse from the stream (the only source-side mechanism a harbor supports); and
- * (2) a best-effort **Icecast admin** `/admin/metadata` GET, which works on real Icecast servers
- * (harbor 404s it — ignored). Auth is HTTP Basic [user]:[password].
+ * parses from the stream; and (2) the **admin** `/admin/metadata?mode=updinfo` GET with HTTP
+ * Basic [user]:[password] — the call BUTT/Mixxx make, and the one a Liquidsoap harbor acts on.
+ * (2) goes over a raw socket ([PlainHttp]): through HttpURLConnection the release build's
+ * cleartext policy silently dropped it, which left harbor DJs with no title at all.
  */
 class IcecastSourceClient(
     private val host: String,
@@ -101,6 +101,12 @@ class IcecastSourceClient(
                 metaStream = wrapper
                 out = wrapper
             }
+            // A title set while connecting (or before a reconnect) only reached the inline
+            // stream; the harbor needs the admin GET, sent once the mount exists. Off the
+            // transport thread so a slow reply can't delay the audio.
+            lastTitle.takeIf { it.isNotEmpty() }?.let { t ->
+                thread(isDaemon = true, name = "ice-title") { adminUpdateMetadata(t) }
+            }
         } catch (e: Throwable) {
             try { s.close() } catch (_: Throwable) {}
             socket = null; out = null; metaStream = null
@@ -122,7 +128,7 @@ class IcecastSourceClient(
         val safe = WireSafety.truncate(WireSafety.stripControlChars(title), WireSafety.MAX_TITLE)
         lastTitle = safe
         metaStream?.setTitle(safe)
-        runCatching { adminUpdateMetadata(safe) }  // works on Icecast; harbor 404s — ignored
+        adminUpdateMetadata(safe)
     }
 
     override fun close() {
@@ -139,19 +145,16 @@ class IcecastSourceClient(
         socket = null; out = null; metaStream = null
     }
 
-    /** Icecast admin metadata update (HTTP GET). Liquidsoap harbor has no admin endpoint — ignore failure. */
+    /**
+     * Admin metadata update (HTTP GET), best-effort. Only while the source is up: the server
+     * applies it to the live mount, and before that there's no mount to update (connect()
+     * replays it). Failures are ignored — the inline ICY title still covers Icecast.
+     */
     private fun adminUpdateMetadata(title: String) {
-        val q = "mode=updinfo&charset=UTF-8&mount=" + URLEncoder.encode(mount, "UTF-8") +
-            "&song=" + URLEncoder.encode(title, "UTF-8")
-        val conn = (URL("http://$host:$port/admin/metadata?$q").openConnection() as HttpURLConnection).apply {
-            connectTimeout = 3_000; readTimeout = 3_000
+        if (out == null) return
+        runCatching {
             val auth = Base64.encodeToString("$user:$password".toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-            setRequestProperty("Authorization", "Basic $auth")
-        }
-        try {
-            conn.inputStream.use { it.readBytes() }
-        } finally {
-            conn.disconnect()
+            PlainHttp.get(host, port, adminMetadataPath(mount, title), mapOf("Authorization" to "Basic $auth"))
         }
     }
 
@@ -234,5 +237,10 @@ class IcecastSourceClient(
         fun icyTitleBlock(title: String): ByteArray =
             ("StreamTitle='" + title.replace("';", "\u2019;") + "';").toByteArray(Charsets.UTF_8)
         private const val METAINT = 8_192  // bytes of audio between ICY metadata blocks
+
+        /** Pure: the `/admin/metadata` update path for [mount]. */
+        fun adminMetadataPath(mount: String, title: String): String =
+            "/admin/metadata?mode=updinfo&charset=UTF-8&mount=" + URLEncoder.encode(mount, "UTF-8") +
+                "&song=" + URLEncoder.encode(title, "UTF-8")
     }
 }

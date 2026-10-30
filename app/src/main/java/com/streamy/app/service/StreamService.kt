@@ -220,6 +220,7 @@ class StreamService : Service() {
                                     primary = ShoutcastV1Client(
                                         host = profile.host, port = djPort + 1,
                                         user = profile.djUser ?: "", password = profile.password,
+                                        adminPort = djPort,   // titles: admin.cgi on the listed port
                                     ),
                                     fallback = uvox,
                                 )

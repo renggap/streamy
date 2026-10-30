@@ -69,6 +69,45 @@ class ShoutcastV1ClientTest {
         }
     }
 
+    @Test fun admin_path_carries_the_dj_login_and_encoded_title() {
+        assertThat(ShoutcastV1Client.adminPath("madiundj", "p&w", "Kajian Pagi"))
+            .isEqualTo("/admin.cgi?mode=updinfo&pass=madiundj%3Ap%26w&song=Kajian+Pagi")
+        assertThat(ShoutcastV1Client.adminPath("", "pw", "t")).isEqualTo("/admin.cgi?mode=updinfo&pass=pw&song=t")
+    }
+
+    @Test fun title_set_before_login_is_sent_to_the_admin_port_after_it() {
+        ServerSocket(0).use { v1 ->
+            ServerSocket(0).use { admin ->
+                v1.soTimeout = 3_000; admin.soTimeout = 3_000
+                val source = Thread {
+                    v1.accept().use { s ->
+                        val input = s.getInputStream()
+                        readLine(input)
+                        s.getOutputStream().apply { write("OK2\r\nicy-caps:11\r\n\r\n".toByteArray()); flush() }
+                        while (readLine(input).isNotEmpty()) Unit
+                        Thread.sleep(1_000)   // stay connected while the title goes out
+                    }
+                }.apply { start() }
+                val requestLine = AtomicReference<String>()
+                val adminServer = Thread {
+                    admin.accept().use { s ->
+                        requestLine.set(readLine(s.getInputStream()))
+                        s.getOutputStream().apply { write("HTTP/1.0 200 OK\r\n\r\nTitle Updated".toByteArray()); flush() }
+                    }
+                }.apply { start() }
+
+                val c = ShoutcastV1Client("127.0.0.1", v1.localPort, user = "dj", password = "pw", adminPort = admin.localPort)
+                c.updateNowPlaying("Live Show")   // not logged in: held, not sent
+                c.connect(24, "n", "g")
+                adminServer.join(3_000)
+                c.close()
+                source.join(3_000)
+
+                assertThat(requestLine.get()).isEqualTo("GET /admin.cgi?mode=updinfo&pass=dj%3Apw&song=Live+Show HTTP/1.0")
+            }
+        }
+    }
+
     /** Fake server that answers the login line with [reply]; returns connect()'s failure. */
     private fun connectAgainst(reply: String): Throwable? = ServerSocket(0).use { server ->
         val fake = Thread {
