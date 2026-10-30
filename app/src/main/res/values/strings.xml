@@ -136,8 +136,8 @@
     <string name="edit_group_server">Server</string>
     <string name="edit_group_audio">Audio</string>
     <string name="edit_mode">Mode</string>
-    <string name="edit_azuracast">AzuraCast server</string>
-    <string name="edit_azuracast_hint">Uses Icecast DJ protocol instead of SHOUTcast Ultravox. Leave unchecked for sc_trans / DNAS.</string>
+    <string name="edit_azuracast">Icecast-style DJ login (AzuraCast, Liquidsoap)</string>
+    <string name="edit_azuracast_hint">Tick for AzuraCast or Liquidsoap DJ ports. Unticked, Streamy tries SHOUTcast v1 (as Centova panels show) and then Ultravox automatically.</string>
     <string name="edit_name">Name</string>
     <string name="edit_name_placeholder">My station</string>
     <string name="edit_host">Host</string>
@@ -227,6 +227,7 @@
     <string name="err_server_rejected">The server rejected the connection.</string>
     <string name="err_unknown_host">Server address not found. Check the host name.</string>
     <string name="err_conn_refused">The server refused the connection. Check the port.</string>
+    <string name="err_handshake_timeout">The server connected but didn\'t answer the SHOUTcast handshake. If this is an AzuraCast or Liquidsoap DJ port, tick \"Icecast-style DJ login\" in the profile.</string>
     <string name="err_timeout">The server didn\'t respond in time.</string>
     <string name="err_no_network">No network connection.</string>
     <string name="err_generic">The broadcast stopped unexpectedly.</string>

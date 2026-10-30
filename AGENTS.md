@@ -7,7 +7,7 @@ Android app (Kotlin/Compose) that streams mic audio to SHOUTcast v2 (DNAS2) / Ic
 ```bash
 ./gradlew :app:assembleDebug       # debug APK (native NDK MP3 lib builds via CMake)
 ./gradlew :app:assembleRelease     # signed only if keystore set in local.properties
-./gradlew :app:testDebugUnitTest   # JVM unit tests, no network (baseline: 76 tests, 5 env-gated skips)
+./gradlew :app:testDebugUnitTest   # JVM unit tests, no network (baseline: 92 tests, 5 env-gated skips)
 ./gradlew :app:connectedDebugAndroidTest  # instrumented; needs device/emulator + real server creds
 ```
 
@@ -18,7 +18,7 @@ Live network tests (`*LiveTest`) and instrumented tests are **env-gated**: they 
 ```
 app/src/main/java/com/streamy/app/
   audio/   AudioCapture, AudioPipeline, Encoder, Mp3Encoder (JNI), AacEncoder, StreamSink, LevelTap/LevelFeed
-  net/     UvoxClient (Ultravox 2.1 + XTEA), IcecastSourceClient (ICE/1.0), StreamTransport, WireSafety
+  net/     UvoxClient (Ultravox 2.1 + XTEA), ShoutcastV1Client (v1 DJ login), FallbackSourceClient (DJ: v1 → Ultravox), IcecastSourceClient (ICE/1.0), StreamTransport, WireSafety
   service/ StreamService (live stream), RecordService (standalone recorder), ServiceController, StreamState/RecordState
   data/    Room (ProfileEntity/Dao/AppDatabase), Models (AudioConfig, BroadcastMode, DjProtocol), ProfileRepository
   ui/      Compose: HomeScreen, VuMeter, BitrateChooser, EditProfileScreen, ServerProfilesScreen, SettingsScreen, StreamyViewModel
