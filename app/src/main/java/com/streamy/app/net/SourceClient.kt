@@ -12,6 +12,7 @@ interface SourceClient {
     fun send(frame: ByteArray)
     fun close()
     /** Push a now-playing title. Default no-op; [UvoxClient] sends Ultravox 0x902, [IcecastSourceClient]
-     *  injects ICY inline metadata (+ best-effort Icecast admin update). Harmless if unsupported. */
+     *  injects ICY inline metadata + an `/admin/metadata` GET, [ShoutcastV1Client] an `/admin.cgi`
+     *  GET. Best-effort; a title set before the handshake is replayed once it completes. */
     fun updateNowPlaying(title: String) {}
 }
