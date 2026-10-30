@@ -2,9 +2,9 @@
 
 Android app that broadcasts **live speech** from the microphone to a **SHOUTcast v2 (DNAS2)** server, running reliably in the **background**, with a Hallmark-designed broadcast-console UI.
 
-[![status](https://img.shields.io/badge/status-v1.12-FF3B30)]() [![platform](https://img.shields.io/badge/platform-Android-3DDC84)]() [![minSdk](https://img.shields.io/badge/minSdk-24-00B0FF)]()
+[![status](https://img.shields.io/badge/status-v1.13-FF3B30)]() [![platform](https://img.shields.io/badge/platform-Android-3DDC84)]() [![minSdk](https://img.shields.io/badge/minSdk-24-00B0FF)]()
 
-## Features (v1.12)
+## Features (v1.13)
 
 - **Live speech → SHOUTcast v2 (DNAS2)** — captures the mic, encodes, and streams over the real **Ultravox 2.1** source protocol (live-verified against DNAS2 2.6.1).
 - **MP3 encoding** via `libmp3lame` (NDK/JNI) — bitrates **16 / 24 / 48 / 64 / 96 / 128 / 192 kbps**, sample rates 16 / 22.05 / 44.1 / 48 kHz, mono/stereo. (AAC encoding is implemented via `MediaCodec` but disabled in the UI for v1.0.0 — being revisited.)
