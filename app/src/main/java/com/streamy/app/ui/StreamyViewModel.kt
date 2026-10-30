@@ -353,6 +353,19 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    /**
+     * Now-playing title. Persisted so the title the DJ sent stays in the field across tab
+     * switches, Stop → Start and app restarts instead of resetting to blank, and is re-sent
+     * when the next stream starts.
+     */
+    private val _nowPlaying = MutableStateFlow(uiPrefs.getString(KEY_NOW_PLAYING, "") ?: "")
+    val nowPlaying: StateFlow<String> = _nowPlaying.asStateFlow()
+
+    fun setNowPlaying(text: String) {
+        _nowPlaying.value = text
+        uiPrefs.edit().putString(KEY_NOW_PLAYING, text).apply()
+    }
+
     fun setKeepScreenOn(on: Boolean) {
         _keepScreenOn.value = on
         uiPrefs.edit().putBoolean(KEY_KEEP_SCREEN_ON, on).apply()
@@ -536,7 +549,10 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         uiPrefs.edit().putLong(KEY_STREAM_PROFILE, profileId).apply()
         _startDeviceName.value = _selectedDeviceName.value
         streamStartGuardUntil = SystemClock.elapsedRealtime() + START_GUARD_MS
-        ServiceController.start(getApplication(), profileId, _selectedDeviceName.value)
+        ServiceController.start(
+            getApplication(), profileId, _selectedDeviceName.value,
+            title = _nowPlaying.value.takeIf { it.isNotBlank() },
+        )
     }
 
     fun stop() {
@@ -712,6 +728,7 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         private const val KEY_STREAM_PROFILE = "stream_profile_id"
         private const val KEY_KEEP_SCREEN_ON = "keep_screen_on_live"
         private const val KEY_NOTIF_ASKED = "notifications_asked"
+        private const val KEY_NOW_PLAYING = "now_playing_title"
 
         /** Double-tap window for START intents (see [streamStartGuardUntil]). */
         private const val START_GUARD_MS = 3_000L

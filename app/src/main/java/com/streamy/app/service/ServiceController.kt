@@ -17,11 +17,13 @@ object ServiceController {
      * passed via Intent — NOT SharedPreferences — so an immediate start after selection can't
      * lose to an in-flight apply().
      */
-    fun start(context: Context, profileId: Long, deviceName: String? = null) {
+    /** [title], when set, is the now-playing title the stream announces as soon as it connects. */
+    fun start(context: Context, profileId: Long, deviceName: String? = null, title: String? = null) {
         val intent = Intent(context, StreamService::class.java).apply {
             action = StreamService.ACTION_START
             putExtra(StreamService.EXTRA_PROFILE_ID, profileId)
             deviceName?.let { putExtra(StreamService.EXTRA_DEVICE_NAME, it) }
+            title?.let { putExtra(StreamService.EXTRA_TITLE, it) }
         }
         ContextCompat.startForegroundService(context, intent)
     }

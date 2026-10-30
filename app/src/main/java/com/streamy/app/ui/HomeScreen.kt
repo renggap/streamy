@@ -82,7 +82,7 @@ fun HomeScreen(
     val lastSavedPath by vm.lastSavedPath.collectAsStateWithLifecycle()
     val recordState by vm.recordState.collectAsStateWithLifecycle()
 
-    var nowPlaying by rememberSaveable { mutableStateOf("") }
+    val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
 
     val isLive = state is StreamState.Live
     val isBusy = state is StreamState.Connecting || state is StreamState.Reconnecting
@@ -133,7 +133,7 @@ fun HomeScreen(
                 if (showNowPlaying) {
                     NowPlayingSection(
                         text = nowPlaying,
-                        onTextChange = { nowPlaying = it },
+                        onTextChange = vm::setNowPlaying,
                         isLive = isLive,
                         onUpdate = { vm.updateNowPlaying(nowPlaying) },
                     )
