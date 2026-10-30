@@ -7,7 +7,7 @@ Android app (Kotlin/Compose) that streams mic audio to SHOUTcast v2 (DNAS2) / Ic
 ```bash
 ./gradlew :app:assembleDebug       # debug APK (native NDK MP3 lib builds via CMake)
 ./gradlew :app:assembleRelease     # signed only if keystore set in local.properties
-./gradlew :app:testDebugUnitTest   # JVM unit tests, no network (baseline: 76 tests, 5 env-gated skips)
+./gradlew :app:testDebugUnitTest   # JVM unit tests, no network (baseline: 92 tests, 5 env-gated skips)
 ./gradlew :app:connectedDebugAndroidTest  # instrumented; needs device/emulator + real server creds
 ```
 
