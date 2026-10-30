@@ -164,6 +164,10 @@
     <string name="settings_system_default">Bawaan sistem</string>
     <string name="settings_input_hint">Mikrofon terpilih berlaku saat siaran berikutnya dimulai. Perangkat dicocokkan berdasarkan nama setiap sesi, jadi aman dicabut-pasang atau setelah reboot.</string>
     <string name="settings_group_display">Tampilan</string>
+    <string name="settings_theme">Tema</string>
+    <string name="settings_theme_light">Terang</string>
+    <string name="settings_theme_dark">Gelap</string>
+    <string name="settings_theme_system">Ikuti sistem</string>
     <string name="settings_keep_screen_on">Layar tetap menyala saat mengudara</string>
     <string name="settings_keep_screen_on_hint">Layar hanya dibuat tetap menyala selama Anda mengudara.</string>
     <string name="settings_group_legal">Legal</string>

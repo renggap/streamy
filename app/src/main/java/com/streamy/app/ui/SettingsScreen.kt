@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -16,6 +18,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.streamy.app.R
+import com.streamy.app.data.ThemeMode
 
 /*
  * JokoUI daylight about page: slate page, white rounded-xl FieldGroups.
@@ -62,6 +66,7 @@ fun SettingsScreen(
     val inputDevices by vm.inputDevices.collectAsStateWithLifecycle()
     val selectedDevice = vm.selectedDeviceName.collectAsStateWithLifecycle().value  // plain val (smart-castable)
     val keepScreenOn by vm.keepScreenOn.collectAsStateWithLifecycle()
+    val themeMode by vm.themeMode.collectAsStateWithLifecycle()
     val systemDefault = stringResource(R.string.settings_system_default)
     val selectedDeviceLabel = if (selectedDevice == null) systemDefault
         else inputDevices.firstOrNull { it.name == selectedDevice }?.label ?: selectedDevice
@@ -171,6 +176,41 @@ fun SettingsScreen(
         }
 
         FieldGroup(stringResource(R.string.settings_group_display)) {
+            Text(
+                stringResource(R.string.settings_theme),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            // One selectable row per mode (not just the radio dot) so the whole 48dp row is the
+            // target and TalkBack reads "<label>, radio button, selected".
+            Column(Modifier.selectableGroup()) {
+                listOf(
+                    ThemeMode.LIGHT to R.string.settings_theme_light,
+                    ThemeMode.DARK to R.string.settings_theme_dark,
+                    ThemeMode.SYSTEM to R.string.settings_theme_system,
+                ).forEach { (mode, label) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = themeMode == mode,
+                                role = Role.RadioButton,
+                                onClick = { vm.setThemeMode(mode) },
+                            )
+                            .padding(vertical = 4.dp),
+                    ) {
+                        RadioButton(selected = themeMode == mode, onClick = null)
+                        Text(
+                            stringResource(label),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                }
+            }
             // Whole row toggles (Switch has no own click handler) so the 48dp target is the
             // row and TalkBack reads one "switch, on/off" node with its label.
             Row(

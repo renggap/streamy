@@ -15,10 +15,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -140,9 +142,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Edge-to-edge so the themed Surface fills behind the status/nav bars; the Scaffold in
-        // StreamyNavigation pads content by its system-bar insets. The app is forced light, so
-        // pin LIGHT bar styles (dark icons): the default auto style follows the *system* dark
-        // mode and drew white icons on the slate-50 page.
+        // StreamyNavigation pads content by its system-bar insets. Bar icon style follows the
+        // in-app theme, not the system's (the first call is the pre-Compose default: light page,
+        // dark icons; setContent re-applies it whenever the theme changes).
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(LIGHT_NAV_SCRIM, DARK_NAV_SCRIM),
@@ -158,7 +160,20 @@ class MainActivity : ComponentActivity() {
         ServiceController.bindRecord(this, recordServiceConnection)
 
         setContent {
-            StreamyTheme {
+            val themeMode by vm.themeMode.collectAsStateWithLifecycle()
+            val darkTheme = themeMode.isDark(isSystemInDarkTheme())
+            // Bars must follow the theme the user picked, which may differ from the system's:
+            // dark page → light icons (dark style), light page → dark icons.
+            DisposableEffect(darkTheme) {
+                enableEdgeToEdge(
+                    statusBarStyle = if (darkTheme) SystemBarStyle.dark(Color.TRANSPARENT)
+                        else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+                    navigationBarStyle = if (darkTheme) SystemBarStyle.dark(DARK_NAV_SCRIM)
+                        else SystemBarStyle.light(LIGHT_NAV_SCRIM, DARK_NAV_SCRIM),
+                )
+                onDispose {}
+            }
+            StreamyTheme(darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,

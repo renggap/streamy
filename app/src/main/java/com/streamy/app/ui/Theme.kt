@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.sp
  */
 
 object StreamyColors {
-    // Dark (kept for API compat — the app currently themes light-only; see StreamyTheme)
+    // Dark scheme (Settings → Display → Theme; see StreamyTheme)
     val DarkPaper = Color(0xFF14161A)
     val DarkPaper2 = Color(0xFF1B1E24)     // raised surface (cards)
     val DarkPaper3 = Color(0xFF242830)     // raised surface (buttons)
@@ -56,7 +56,7 @@ object StreamyColors {
     val JokoPrimarySoft = Color(0xFFECFCCB) // lime-100 — soft badge / active toggle fill
     val JokoPrimaryInk = Color(0xFF3F6212)  // lime-800 — text on soft / tinted lime fills (≥6:1)
 
-    // Dark-scheme lime (kept coherent with light even though the app is forced light)
+    // Dark-scheme lime (same hue as light, shifted for contrast on dark surfaces)
     val JokoPrimaryOnDark = Color(0xFFA3E635)   // lime-400
     val JokoPrimaryDeep = Color(0xFF1A2E05)     // lime-950 — text on lime-400
     val JokoPrimaryDim = Color(0xFF365314)      // lime-900 — dark soft fill
@@ -72,9 +72,8 @@ object StreamyColors {
     val LightRule = Color(0xFFE2E8F0)       // slate-200 — card borders (border-border)
 }
 
-// Unused while the app is forced light, but kept coherent: primary is lime like the light
-// scheme (it was red, which would have turned every Start/Save into a destructive-looking
-// action) and red stays reserved for on-air / error.
+// Primary is lime like the light scheme (red would turn every Start/Save into a destructive-
+// looking action); red stays reserved for on-air / error.
 private val StreamyDarkColors = darkColorScheme(
     primary = StreamyColors.JokoPrimaryOnDark,
     onPrimary = StreamyColors.JokoPrimaryDeep,
@@ -85,14 +84,30 @@ private val StreamyDarkColors = darkColorScheme(
     secondaryContainer = StreamyColors.LiveDim,
     onSecondaryContainer = StreamyColors.Live,
     tertiary = Color(0xFFFBBF24),                   // amber-400 — readable on dark
+    onTertiary = Color(0xFF451A03),                 // amber-950
+    tertiaryContainer = Color(0xFF78350F),          // amber-900 — warning soft fills
+    onTertiaryContainer = Color(0xFFFDE68A),        // amber-200
     background = StreamyColors.DarkPaper,
     onBackground = StreamyColors.DarkInk,
     surface = StreamyColors.DarkPaper2,
     onSurface = StreamyColors.DarkInk,
     surfaceVariant = StreamyColors.DarkPaper3,
     onSurfaceVariant = StreamyColors.DarkInk2,
+    // Set explicitly like the light scheme: M3's defaults for these roles are the baseline
+    // purple-tinted greys, which would show up on cards, menus and the nav bar.
+    surfaceContainerLowest = StreamyColors.DarkPaper,
+    surfaceContainerLow = StreamyColors.DarkPaper2,
+    surfaceContainer = StreamyColors.DarkPaper2,
+    surfaceContainerHigh = StreamyColors.DarkPaper3,
+    surfaceContainerHighest = StreamyColors.DarkRule,
+    surfaceDim = StreamyColors.DarkPaper,
+    surfaceBright = StreamyColors.DarkPaper3,
     outline = StreamyColors.DarkRule,
     outlineVariant = StreamyColors.DarkInk3,
+    inverseSurface = StreamyColors.DarkInk,
+    inverseOnSurface = StreamyColors.DarkPaper,
+    inversePrimary = StreamyColors.JokoPrimary,
+    scrim = Color.Black,
     error = StreamyColors.OnAir,
     onError = Color.White,
     errorContainer = StreamyColors.OnAirDim,
@@ -267,7 +282,7 @@ private val StreamyShapes = Shapes(
 
 @Composable
 fun StreamyTheme(
-    darkTheme: Boolean = false,   // JokoUI daylight-first: light always, never follow system dark
+    darkTheme: Boolean = false,   // daylight-first default; the caller resolves the user's ThemeMode
     content: @Composable () -> Unit,
 ) {
     val colors = if (darkTheme) StreamyDarkColors else StreamyLightColors
