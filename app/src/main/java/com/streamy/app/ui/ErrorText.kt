@@ -24,6 +24,7 @@ data class ErrorText(
  *  - transport give-up: `gave_up after N attempts` (StreamTransport);
  *  - ProtocolException texts: Ultravox `cipher|auth|standby|<step> NAK: <server text>`
  *    (UvoxClient) and `icecast source rejected: <HTTP status line>` (IcecastSourceClient);
+ *  - `uvox handshake timed out`: TCP connected but the server ignored Ultravox (wrong protocol);
  *  - raw java.net exception messages (resolve / refused / timeout / unreachable).
  * Order matters: "in use" is checked before the generic auth NAK because DNAS reports a
  * busy stream id through the auth step (`auth NAK: NAK:Stream In Use`).
@@ -40,6 +41,7 @@ fun streamErrorText(reason: String): ErrorText {
         r == "start_failed" || r.isEmpty() -> ErrorText(R.string.err_start_failed)
         r == "audio_failed" -> ErrorText(R.string.err_audio_failed)
         "in use" in lower -> ErrorText(R.string.err_stream_in_use)
+        UVOX_HANDSHAKE_TIMEOUT in lower -> ErrorText(R.string.err_handshake_timeout)
         lower.startsWith("icecast source rejected") -> icecastRejection(r, lower)
         lower.startsWith("auth nak") -> ErrorText(R.string.err_auth)
         lower.startsWith("mime nak") -> ErrorText(R.string.err_format_rejected, detail = r)
@@ -75,6 +77,7 @@ private fun icecastRejection(raw: String, lower: String): ErrorText {
     }
 }
 
+private const val UVOX_HANDSHAKE_TIMEOUT = "uvox handshake timed out"   // UvoxClient.HANDSHAKE_TIMEOUT_TEXT
 private val GAVE_UP = Regex("""gave_up after (\d+) attempts?""")
 private val HTTP_CODE = Regex("""http/\d(?:\.\d)?\s+(\d{3})""")
 

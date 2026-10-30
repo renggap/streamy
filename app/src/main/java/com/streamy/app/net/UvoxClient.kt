@@ -5,6 +5,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketTimeoutException
 
 /**
  * SHOUTcast 2 / Ultravox 2.1 source client. Live-verified against DNAS2 2.6.1 for BOTH
@@ -233,7 +234,15 @@ class UvoxClient(
             if (payload != null) payload.toByteArray(Charsets.UTF_8) + byteArrayOf(0) else ByteArray(0)
         o.write(message(cls, type, p))
         o.flush()
-        return readPayload(input)
+        // The TCP connect succeeded, so a silent server here is speaking a different protocol
+        // (e.g. a Centova/sc_trans DJ port that wants an Icecast-style SOURCE login and ignores
+        // Ultravox bytes). Distinct text lets the UI point at the fix; still an IOException, so
+        // it stays retryable like any other network timeout.
+        try {
+            return readPayload(input)
+        } catch (e: SocketTimeoutException) {
+            throw SocketTimeoutException(HANDSHAKE_TIMEOUT_TEXT)
+        }
     }
 
     private fun readPayload(input: InputStream): String {
@@ -265,6 +274,9 @@ class UvoxClient(
 
         /** Frame classifier bits — see the class doc for the layout. */
         private const val HANDSHAKE_TIMEOUT_MS = 6_000
+
+        /** Message of the timeout raised when the server never answers an Ultravox request. */
+        const val HANDSHAKE_TIMEOUT_TEXT = "uvox handshake timed out"
 
         /** Cap on close()'s best-effort Terminate write before force-closing the socket. */
         private const val CLOSE_JOIN_MS = 500L
