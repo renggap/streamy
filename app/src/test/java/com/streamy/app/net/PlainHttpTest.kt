@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicReference
 /** [PlainHttp] (raw-socket title-update GET) against a local fake server — no network. */
 class PlainHttpTest {
 
-    @Test fun get_sends_request_and_returns_status() {
+    @Test fun get_sends_request_and_returns_status_and_body() {
         ServerSocket(0).use { server ->
             server.soTimeout = 3_000
             val lines = AtomicReference<List<String>>()
@@ -20,11 +20,14 @@ class PlainHttpTest {
                 }
             }.apply { start() }
 
-            val code = PlainHttp.get("127.0.0.1", server.localPort, "/admin.cgi?mode=updinfo&song=x",
+            val reply = PlainHttp.get("127.0.0.1", server.localPort, "/admin.cgi?mode=updinfo&song=x",
                 mapOf("Authorization" to "Basic abc"))
             fake.join(3_000)
 
-            assertThat(code).isEqualTo(200)
+            // The reply carries the server's real answer — the toast's honesty depends on it.
+            assertThat(reply.code).isEqualTo(200)
+            assertThat(reply.ok).isTrue()
+            assertThat(reply.body).isEqualTo("ok")
             assertThat(lines.get().first()).isEqualTo("GET /admin.cgi?mode=updinfo&song=x HTTP/1.0")
             assertThat(lines.get()).contains("Authorization: Basic abc")
             assertThat(lines.get().any { it.startsWith("User-Agent: Mozilla") }).isTrue()

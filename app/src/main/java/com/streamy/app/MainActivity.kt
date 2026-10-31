@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
                             .collect { (on, path) -> vm.onRecording(on, path) }
                     }
                     launch { s.recordingFailed.collect { vm.onRecordingFailed(it) } }
+                    launch { s.titleAcks.collect { vm.onTitleAck(it) } }
                     // Push live mic gain to the service. StateFlow's first emission hydrates the
                     // service's micGain on bind — before any start — so the first frame is never
                     // at unity by mistake. Gain can only change while the UI is visible.

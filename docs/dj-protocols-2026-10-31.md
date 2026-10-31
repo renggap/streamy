@@ -65,3 +65,33 @@ Other rig findings (no app action needed, but they explain field reports):
   airing its own titles) — same "DJ override never airs" finding as the streamy-panel djMux; with
   `encoder_1=mp3` (licensed) the DJ takes over and titles land. A DJ show that "connects fine but
   airs nothing" on a sc_trans station is this server-side limitation, not the app.
+
+## Field investigation: centova1 DJ drops + titles (2026-10-31, live with station creds)
+
+Reproduced the "dropped after a few seconds / cannot update Now Playing" report against the real
+station (sc_trans2 behind Centova; panel 8092, v1 listener 8093, Ultravox DJ 8094, DNAS `/stats`
+on 8096/8090). Findings, each live-verified:
+
+- **The drop is the server's one-DJ rule.** sc_trans allows ONE DJ at a time and **evicts the live
+  session ~1 s after a second DJ login** (reproduced: session A died the moment session B logged
+  in; B then held the slot for minutes). The app itself opens exactly one login per session — the
+  real `ShoutcastV1Client` held 60–150 s sessions repeatedly, all MP3 shapes (MPEG-1/2/2.5). So a
+  show that dies seconds after starting had its slot taken by another login: a second device, the
+  desktop app, or another DJ on the shared account.
+- **The v1 title path is real and now honest.** While a DJ session is live, the Weblet answers
+  `200 <html><body>Title Updated</body></html>` to `GET :8092/admin.cgi?mode=updinfo&pass=…&song=…`
+  and the title DOES land verbatim on the DNAS `SONGTITLE` (verified with the real client:
+  "Kajian Pagi 33254" aired exactly). A wrong password — or any push with no DJ session — answers
+  **404**. That 200/`Title Updated` reply is what `ShoutcastV1Client.updateNowPlaying` now reports
+  to the UI: the success toast fires only on the server's real confirmation.
+- **The title lags behind the audio.** The DJ's audio takes over the air within ~1–3 s (fingerprint
+  test), but sc_trans keeps re-asserting the AutoDJ title at its track boundaries — with long
+  lecture tracks the DJ's title can take many minutes to appear in `SONGTITLE`, then it sticks.
+  Server-side "Timed content" behavior; quick `/stats` checks after an update prove nothing.
+- **Wrong port looks exactly like "dropped after a few seconds".** sc_trans's Weblet (8092) stays
+  SILENT on an Ultravox handshake — a source client that targets it times out at its ~6 s handshake
+  budget and reconnect-loops. Raw sc_trans puts its Ultravox DJ listener on `djport2` (Centova
+  convention: djport+2 — 8094 here), which the app now also tries (was: only the entered port,
+  so AAC profiles and v1 failures dead-ended at the Weblet).
+- Bare-password v1 logins (`password\r\n` with no `login:`) are silently closed by sc_trans — the
+  profile's DJ user field is required (the form enforces it).

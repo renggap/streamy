@@ -23,6 +23,7 @@ import com.streamy.app.net.UpdateChecker
 import com.streamy.app.service.RecordState
 import com.streamy.app.service.ServiceController
 import com.streamy.app.service.StreamState
+import com.streamy.app.service.TitleAck
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -623,9 +624,11 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Push now-playing metadata via Ultravox 0x902 (admin-free) on the running stream.
-     * Routes through [ServiceController] -> [StreamService.ACTION_META] -> [UvoxClient.updateNowPlaying].
-     * Gated on the RUNNING stream, not the selection: the title belongs to what is on air.
+     * Push now-playing metadata via the running stream's source protocol (Ultravox 0x902,
+     * SHOUTcast v1 admin.cgi, or Icecast /admin/metadata) — see [ServiceController] ->
+     * [com.streamy.app.service.StreamService.ACTION_META]. Gated on the RUNNING stream, not the
+     * selection: the title belongs to what is on air. No toast here: the service answers with
+     * the server's REAL result and [onTitleAck] toasts from that — success is never assumed.
      */
     fun updateNowPlaying(title: String) {
         if (streamState.value !is StreamState.Live || streamProfile.value == null) {
@@ -633,7 +636,11 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         ServiceController.updateNowPlaying(getApplication(), title)
-        message(R.string.msg_title_updated)
+    }
+
+    /** One Now-playing push finished: toast from the server's real answer (see [TitleAck]). */
+    fun onTitleAck(ack: TitleAck) {
+        message(if (ack.ok) R.string.msg_title_updated else R.string.msg_title_update_failed)
     }
 
     /**

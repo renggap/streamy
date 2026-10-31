@@ -47,8 +47,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -98,6 +101,13 @@ class StreamService : Service() {
     private var client: SourceClient? = null
     private var encoder: Encoder? = null
     private var profileName: String? = null
+
+    /** Result of the latest Now-playing push (see [TitleAck]); collected by the VM for the toast.
+     *  A SharedFlow, not state: a toast is an event — it must fire once per push, never replay
+     *  to a re-bound UI. */
+    private val _titleAcks = MutableSharedFlow<TitleAck>(extraBufferCapacity = 1)
+    val titleAcks: SharedFlow<TitleAck> = _titleAcks.asSharedFlow()
+    private val titleAckSeq = java.util.concurrent.atomic.AtomicLong(0)
 
     // Last time a Backpressure drop-count made it to the UI (throttled; see toStreamState).
     @Volatile private var lastDropUiEmitMs = 0L
@@ -157,7 +167,11 @@ class StreamService : Service() {
                 val title = intent.getStringExtra(EXTRA_TITLE)
                 if (title != null) {
                     scope.launch {
-                        client?.updateNowPlaying(title)
+                        // The push reports the server's real answer (Weblet "Title Updated",
+                        // accepted /admin/metadata, or a clean 0x902 write) — publish it so the
+                        // UI only toasts success when the server actually took the title.
+                        val ok = client?.updateNowPlaying(title) ?: false
+                        _titleAcks.tryEmit(TitleAck(titleAckSeq.incrementAndGet(), title, ok))
                     }
                 }
             }
@@ -203,18 +217,26 @@ class StreamService : Service() {
                 } else {
                     when (DjProtocol.parse(profile.djProtocol)) {
                         DjProtocol.ULTRAVOX -> {
-                            val uvox = UvoxClient(
-                                host = profile.host, port = djPort, sid = profile.sid,
+                            fun uvoxAt(port: Int) = UvoxClient(
+                                host = profile.host, port = port, sid = profile.sid,
                                 password = profile.password,
                                 mime = if (cfg.codec == Codec.AAC) "audio/aacp" else "audio/mpeg",
                                 sampleRateHz = cfg.sampleRateHz, channels = if (cfg.mono) 1 else 2,
                                 djUser = profile.djUser,
                             )
-                            // SHOUTcast DJ ports come in two styles, both live-verified: Centova /
-                            // sc_trans2 panels advertise a v1 login whose source port is the listed
-                            // port + 1, others speak only Ultravox on the listed port. Try v1 first,
-                            // then Ultravox, so the DJ just types what their panel shows. v1 is
-                            // MP3-only and needs a port + 1 that exists.
+                            val uvox = uvoxAt(djPort)
+                            // SHOUTcast DJ ports come in several styles, all live-probed: panels may
+                            // run a single-protocol mux on the entered port (streamy-panel), and raw
+                            // sc_trans opens its v1 listener on djport+1 with djport2 on a separate
+                            // port — the Centova convention puts it at djport+2 (centova1: panel
+                            // 8092, v1 on 8093, Ultravox DJ on 8094). An Ultravox DJ that only tries
+                            // the entered port dead-ends at sc_trans's Weblet, which stays SILENT on
+                            // binary handshakes -> a ~6 s timeout that looks like "connected, then
+                            // dropped after a few seconds". So try +2 as well.
+                            val uvoxAlt = if (djPort < 65_533) uvoxAt(djPort + 2) else uvox
+                            // v1 first (Centova/sc_trans2 panels advertise a v1 login on +1), then
+                            // the Ultravox candidates, so the DJ just types what their panel shows.
+                            // v1 is MP3-only and needs a port + 1 that exists.
                             if (cfg.codec == Codec.MP3 && djPort < 65_535) {
                                 FallbackSourceClient(
                                     primary = ShoutcastV1Client(
@@ -222,9 +244,11 @@ class StreamService : Service() {
                                         user = profile.djUser ?: "", password = profile.password,
                                         adminPort = djPort,   // titles: admin.cgi on the listed port
                                     ),
-                                    fallback = uvox,
+                                    fallback = FallbackSourceClient(primary = uvox, fallback = uvoxAlt),
                                 )
-                            } else uvox
+                            } else {
+                                FallbackSourceClient(primary = uvox, fallback = uvoxAlt)
+                            }
                         }
                         DjProtocol.ICECAST -> {
                             // Icecast source mounts only accept MP3 here — coerce AAC defensively

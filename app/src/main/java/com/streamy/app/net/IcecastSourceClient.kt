@@ -120,14 +120,16 @@ class IcecastSourceClient(
         o.flush()
     }
 
-    /** Push now-playing: set the ICY inline title (next injected block) + best-effort Icecast admin. */
-    override fun updateNowPlaying(title: String) {
+    /** Push now-playing: set the ICY inline title (next injected block) + the Icecast admin GET.
+     *  True only when the server accepted the `/admin/metadata` update (the channel harbor/Icecast
+     *  setups act on); false when not connected or the server refused. */
+    override fun updateNowPlaying(title: String): Boolean {
         // CR/LF stripped so a title can't break out of the StreamTitle='...' block; truncated
         // so the padded block stays far under the 4080-byte ICY metadata limit.
         val safe = WireSafety.truncate(WireSafety.stripControlChars(title), WireSafety.MAX_TITLE)
         lastTitle = safe
         metaStream?.setTitle(safe)
-        adminUpdateMetadata(safe)
+        return adminUpdateMetadata(safe)
     }
 
     override fun close() {
@@ -145,16 +147,16 @@ class IcecastSourceClient(
     }
 
     /**
-     * Admin metadata update (HTTP GET), best-effort. Only while the source is up: the server
-     * applies it to the live mount, and before that there's no mount to update (connect()
-     * replays it). Failures are ignored — the inline ICY title still covers Icecast.
+     * Admin metadata update (HTTP GET). True only on a 2xx — the server's real acceptance (what
+     * BUTT/Mixxx treat as success). Only while the source is up: before that there's no mount to
+     * update (connect() replays it) and this returns false. Failures are false, never faked.
      */
-    private fun adminUpdateMetadata(title: String) {
-        if (out == null) return
-        runCatching {
+    private fun adminUpdateMetadata(title: String): Boolean {
+        if (out == null) return false
+        return runCatching {
             val auth = Base64.encodeToString("$user:$password".toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-            PlainHttp.get(host, port, adminMetadataPath(mount, title), mapOf("Authorization" to "Basic $auth"))
-        }
+            PlainHttp.get(host, port, adminMetadataPath(mount, title), mapOf("Authorization" to "Basic $auth")).ok
+        }.getOrDefault(false)
     }
 
     private fun readLine(input: InputStream): String {

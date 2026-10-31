@@ -12,12 +12,38 @@ class FallbackSourceClientTest {
         var connects = 0
         var closed = false
         val sent = mutableListOf<ByteArray>()
+        var titleResult = false
+        val titles = mutableListOf<String>()
         override fun connect(bitrateKbps: Int, name: String, genre: String) {
             connects++
             failWith?.let { throw it }
         }
         override fun send(frame: ByteArray) { sent += frame }
         override fun close() { closed = true }
+        override fun updateNowPlaying(title: String): Boolean {
+            titles += title
+            return titleResult
+        }
+    }
+
+    @Test fun title_push_reports_true_when_either_client_confirmed() {
+        // The toast's honesty flows through here: false only when NO client got a real
+        // server confirmation; both clients still receive the title (whichever is live keeps it,
+        // and the inactive one replays it after its next connect) — even when the first confirms.
+        val v1 = Fake(); val uvox = Fake()
+        val c = FallbackSourceClient(v1, uvox)
+        assertThat(c.updateNowPlaying("T")).isFalse()
+        assertThat(v1.titles).containsExactly("T")
+        assertThat(uvox.titles).containsExactly("T")
+
+        uvox.titleResult = true
+        assertThat(c.updateNowPlaying("T2")).isTrue()
+        assertThat(v1.titles).containsExactly("T", "T2")   // no short-circuit
+
+        uvox.titleResult = false
+        v1.titleResult = true
+        assertThat(c.updateNowPlaying("T3")).isTrue()
+        assertThat(uvox.titles).containsExactly("T", "T2", "T3")
     }
 
     @Test fun primary_success_never_touches_fallback() {

@@ -41,10 +41,13 @@ class FallbackSourceClient(
         (active ?: throw IOException("client closed")).send(frame)
     }
 
-    /** Both get it: whichever connects keeps the title (UvoxClient replays it after its handshake). */
-    override fun updateNowPlaying(title: String) {
-        primary.updateNowPlaying(title)
-        fallback.updateNowPlaying(title)
+    /** Both get it: whichever connects keeps the title (UvoxClient replays it after its handshake).
+     *  True when any client reports the server's real confirmation. Both calls always run — no
+     *  short-circuit — so the inactive client also keeps the latest title for its reconnect replay. */
+    override fun updateNowPlaying(title: String): Boolean {
+        val primaryOk = primary.updateNowPlaying(title)
+        val fallbackOk = fallback.updateNowPlaying(title)
+        return primaryOk || fallbackOk
     }
 
     override fun close() {

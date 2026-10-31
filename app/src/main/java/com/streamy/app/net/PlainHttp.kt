@@ -17,8 +17,14 @@ object PlainHttp {
     private const val TIMEOUT_MS = 3_000
     private const val MAX_LINE = 512
 
-    /** GET [pathAndQuery] (already URL-encoded) and return the HTTP status code, or -1. */
-    fun get(host: String, port: Int, pathAndQuery: String, headers: Map<String, String> = emptyMap()): Int {
+    /** One-shot GET result: the status code and the response body (bounded, may be empty). */
+    data class Reply(val code: Int, val body: String) {
+        /** 2xx — the server accepted the request. */
+        val ok: Boolean get() = code in 200..299
+    }
+
+    /** GET [pathAndQuery] (already URL-encoded) and return the status + body; code -1 on error. */
+    fun get(host: String, port: Int, pathAndQuery: String, headers: Map<String, String> = emptyMap()): Reply {
         Socket().use { s ->
             s.connect(InetSocketAddress(host, port), TIMEOUT_MS)
             s.soTimeout = TIMEOUT_MS
@@ -26,7 +32,17 @@ object PlainHttp {
                 write(request(host, port, pathAndQuery, headers).toByteArray(Charsets.UTF_8))
                 flush()
             }
-            return WireSafety.parseHttpStatus(readLine(s.getInputStream()))
+            val input = s.getInputStream()
+            val status = readLine(input)
+            val code = WireSafety.parseHttpStatus(status)
+            // Header block first, then the (short) body — only what the callers check.
+            var body = ""
+            try {
+                while (readLine(input).isNotEmpty()) Unit   // headers
+                body = readLine(input)                       // first body line is all we need
+            } catch (_: Throwable) {
+            }
+            return Reply(code, body)
         }
     }
 

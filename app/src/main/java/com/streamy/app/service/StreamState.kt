@@ -15,3 +15,10 @@ sealed interface StreamState {
     data class Reconnecting(val attempt: Int) : StreamState
     data class Error(val reason: String) : StreamState
 }
+
+/**
+ * Result of one Now-playing push. [ok] is the SOURCE protocol's real answer — the Weblet's
+ * `Title Updated`, an accepted `/admin/metadata`, or a clean in-stream write — never assumed.
+ * [id] is a monotonic sequence so the UI toasts once per push (StateFlows replay on rebind).
+ */
+data class TitleAck(val id: Long, val title: String, val ok: Boolean)

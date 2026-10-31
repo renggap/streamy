@@ -118,16 +118,21 @@ class ShoutcastV1Client(
         o.flush()
     }
 
-    /** Out-of-band title update. Best-effort; only while logged in (the server applies it to the DJ). */
-    override fun updateNowPlaying(title: String) {
+    /** Out-of-band title update. True only on the Weblet's real `Title Updated` confirmation
+     *  (live-proven: a wrong password answers 404, no DJ session answers 404). False when not
+     *  logged in (deferred, replayed after the handshake) or the server refused. */
+    override fun updateNowPlaying(title: String): Boolean {
         val safe = WireSafety.headerValue(title)
         lastTitle = safe
-        pushTitle(safe)
+        return pushTitle(safe)
     }
 
-    private fun pushTitle(title: String) {
-        if (out == null) return   // not logged in yet: replayed after the handshake
-        runCatching { PlainHttp.get(host, adminPort, adminPath(user, password, title)) }
+    private fun pushTitle(title: String): Boolean {
+        if (out == null) return false   // not logged in yet: replayed after the handshake
+        return runCatching {
+            val reply = PlainHttp.get(host, adminPort, adminPath(user, password, title))
+            reply.code == 200 && reply.body.contains("Title Updated", ignoreCase = true)
+        }.getOrDefault(false)
     }
 
     override fun close() {

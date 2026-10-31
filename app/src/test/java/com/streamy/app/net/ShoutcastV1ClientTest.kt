@@ -99,7 +99,8 @@ class ShoutcastV1ClientTest {
                 }.apply { start() }
 
                 val c = ShoutcastV1Client("127.0.0.1", v1.localPort, user = "dj", password = "pw", adminPort = admin.localPort)
-                c.updateNowPlaying("Live Show")   // not logged in: held, not sent
+                // Not logged in: the push is held for the handshake — no server confirmed it yet.
+                assertThat(c.updateNowPlaying("Live Show")).isFalse()
                 c.connect(24, "n", "g")
                 adminServer.join(3_000)
                 c.close()
@@ -107,6 +108,45 @@ class ShoutcastV1ClientTest {
 
                 assertThat(requestLine.get()).isEqualTo("GET /admin.cgi?mode=updinfo&pass=dj%3Apw&song=Live%20Show HTTP/1.0")
             }
+        }
+    }
+
+    @Test fun title_update_reports_the_weblets_real_answer() {
+        // Live-proven on sc_trans: the Weblet answers 200 "Title Updated" when it applies the
+        // title and 404 when it refuses (wrong password / no DJ session) — the toast must follow
+        // the server, not assume success.
+        assertThat(titleUpdateResult("HTTP/1.0 200 OK\r\n\r\n<html><body>Title Updated</body></html>")).isTrue()
+        assertThat(titleUpdateResult("HTTP/1.0 404 Not Found\r\n\r\nRequest Not Found")).isFalse()
+        assertThat(titleUpdateResult("HTTP/1.0 200 OK\r\n\r\nsomething else")).isFalse()
+    }
+
+    /** Logged-in client + fake Weblet answering [webletReply]; returns updateNowPlaying's verdict. */
+    private fun titleUpdateResult(webletReply: String): Boolean = ServerSocket(0).use { v1 ->
+        ServerSocket(0).use { admin ->
+            v1.soTimeout = 3_000; admin.soTimeout = 3_000
+            val source = Thread {
+                v1.accept().use { s ->
+                    val input = s.getInputStream()
+                    readLine(input)
+                    s.getOutputStream().apply { write("OK2\r\nicy-caps:11\r\n\r\n".toByteArray()); flush() }
+                    while (readLine(input).isNotEmpty()) Unit
+                    Thread.sleep(1_500)   // stay logged in while the title goes out
+                }
+            }.apply { start() }
+            val weblet = Thread {
+                admin.accept().use { s ->
+                    readLine(s.getInputStream())
+                    s.getOutputStream().apply { write(webletReply.toByteArray()); flush() }
+                }
+            }.apply { start() }
+
+            val c = ShoutcastV1Client("127.0.0.1", v1.localPort, user = "dj", password = "pw", adminPort = admin.localPort)
+            c.connect(24, "n", "g")
+            val ok = c.updateNowPlaying("Judul Lagu")
+            weblet.join(3_000)
+            c.close()
+            source.join(3_000)
+            ok
         }
     }
 

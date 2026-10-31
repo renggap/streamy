@@ -205,6 +205,7 @@
     <string name="msg_start_streaming_first">Mulai siaran terlebih dahulu.</string>
     <string name="msg_select_profile_for_recorder">Pilih profil terlebih dahulu — perekam memakai pengaturan audionya.</string>
     <string name="msg_title_updated">Judul diperbarui</string>
+    <string name="msg_title_update_failed">Judul gagal diperbarui di server</string>
     <string name="msg_mic_permission_required">Akses mikrofon diperlukan untuk bersiaran atau merekam.</string>
     <string name="msg_mic_permission_blocked">Akses mikrofon untuk Streamy dimatikan. Izinkan di Setelan.</string>
 

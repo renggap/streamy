@@ -11,8 +11,11 @@ interface SourceClient {
     fun connect(bitrateKbps: Int, name: String, genre: String)
     fun send(frame: ByteArray)
     fun close()
-    /** Push a now-playing title. Default no-op; [UvoxClient] sends Ultravox 0x902, [IcecastSourceClient]
-     *  injects ICY inline metadata + an `/admin/metadata` GET, [ShoutcastV1Client] an `/admin.cgi`
-     *  GET. Best-effort; a title set before the handshake is replayed once it completes. */
-    fun updateNowPlaying(title: String) {}
+    /** Push a now-playing title; returns true ONLY when the server confirmed the update —
+     *  [UvoxClient] reports a successful in-stream write on a connected session, [IcecastSourceClient]
+     *  an accepted `/admin/metadata` GET, [ShoutcastV1Client] the Weblet's `Title Updated` reply.
+     *  False when not connected, deferred (replayed after the handshake), or the server refused —
+     *  the UI must never claim success on false. A title set before the handshake is replayed
+     *  once it completes (that replay is fire-and-forget). */
+    fun updateNowPlaying(title: String): Boolean = false
 }

@@ -198,10 +198,12 @@ class UvoxClient(
      * Admin-free in-stream metadata via Ultravox class 3 / type 0x902. Live-verified against
      * DNAS2 2.6.1: one message with payload `[MetadataID u16 BE][Span u16 BE][Index u16 BE][XML]`
      * updates SONGTITLE with NO admin creds. `<TIT2>title</TIT2>` alone sets SONGTITLE = title.
-     * Best-effort: no-op if not connected. The frame trailer added by [message] is correct —
-     * do NOT add a NUL inside the payload.
+     * Returns true when the message was written to the connected session — 0x902 has no ACK, so
+     * a clean write is the honest maximum the wire offers; false when not connected (deferred,
+     * replayed after the handshake) or the write failed. The frame trailer added by [message] is
+     * correct — do NOT add a NUL inside the payload.
      */
-    override fun updateNowPlaying(title: String) {
+    override fun updateNowPlaying(title: String): Boolean {
         // Strip CR/LF + other control chars (a title can't break the XML) and cap at 512 chars
         // so 6 + xml.size never overflows the u16 payload length in [message].
         val safe = WireSafety.truncate(WireSafety.stripControlChars(title), WireSafety.MAX_HEADER_VALUE)
@@ -211,14 +213,15 @@ class UvoxClient(
         val payload = ByteArray(6 + xml.size)
         payload[1] = 1; payload[3] = 1; payload[5] = 1 // MetadataID=1, Span=1, Index=1 (BE u16, high byte 0)
         System.arraycopy(xml, 0, payload, 6, xml.size)
-        val o = out ?: return   // not connected yet: replayed after the handshake
+        val o = out ?: return false  // not connected yet: replayed after the handshake
         val msg = message(3, 0x902, payload)
-        runCatching {
+        return runCatching {
             synchronized(writeLock) {
                 o.write(msg)
                 o.flush()
             }
-        }
+            true
+        }.getOrDefault(false)
     }
 
     private fun String.xmlEsc() =
