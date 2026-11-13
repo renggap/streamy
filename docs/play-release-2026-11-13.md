@@ -88,8 +88,9 @@ Language: Indonesian (id). English translation optional but recommended later.
 ## Policy questionnaires
 
 - **Privacy policy URL** (required for mic apps):
-  `https://streamy-app.pages.dev/privacy/` — deploy `web/` to Cloudflare Pages first and verify
-  the URL loads publicly.
+  `https://streamy-app.pages.dev/privacy/` — **live** (deployed 2026-11-13). The site deploys
+  manually (no git integration): `wrangler pages deploy web/ --project-name streamy-app`
+  (omitting `--branch` targets the production branch).
 - **Data safety form** — recommended declaration:
   - "Does your app collect or share user data?" → **No.**
   - Rationale: mic audio, titles, recordings and credentials go only to the user's own
