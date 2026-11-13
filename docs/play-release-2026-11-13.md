@@ -41,29 +41,10 @@ requesting a reset from Google (slow).
 
 ## Store listing (copy-paste ready)
 
-Language: Indonesian (id). English translation optional but recommended later.
+Language: Indonesian (id) default, English translation included.
 
-- **App name**: `Streamy` (30 char limit; "Streamy — Siaran Radio" also fits)
-- **Short description** (max 80):
-  `Siaran radio internet dari ponsel Anda. Kirim suara langsung ke server SHOUTcast Anda.`
-- **Full description** (max 4000) — adapt from `web/android/` marketing copy:
-
-  > Streamy mengirim suara Anda secara langsung ke server radio internet SHOUTcast/Icecast —
-  > dan tetap bersiaran meski layar mati.
-  >
-  > • Ke server radio sungguhan — protokol sumber SHOUTcast v2 (Ultravox 2.1) dan ICE/1.0
-  > (Icecast), teruji langsung terhadap DNAS 2.6.1.
-  > • Kualitas audio pilihan Anda — MP3 16–192 kbps, pilih laju sampel serta mono/stereo.
-  > • Tetap siaran di latar belakang — layanan latar depan menjaga mikrofon dan koneksi tetap
-  > hidup, dan menyambung ulang otomatis setelah gangguan jaringan.
-  > • Judul now-playing — ketik nama surat, qari, atau acara saat siaran; pendengar melihatnya
-  > seketika. Tanpa kata sandi admin server.
-  > • Meter VU dan osiloskop real-time dari sinyal mikrofon Anda.
-  > • Profil banyak stasiun — simpan host, port, kata sandi, dan pengaturan audio per server.
-  > • Perekam MP3 mandiri — simpan hafalan atau acara Anda ke penyimpanan perangkat.
-  >
-  > Streamy adalah alat siaran profesional yang muat di saku. Audio dikirim hanya ke server yang
-  > Anda tentukan sendiri; pengembang tidak mengumpulkan data apa pun.
+- **App name**, **short description**, **full description** (id + en, all length-verified):
+  `docs/play-listing-copy.md` — paste directly into Play Console.
 
 - **Assets**:
   - App icon 512×512 PNG — **ready**: `web/assets/play/icon-512.png` (rendered from
