@@ -7,6 +7,7 @@ Android app (Kotlin/Compose) that streams mic audio to SHOUTcast v2 (DNAS2) / Ic
 ```bash
 ./gradlew :app:assembleDebug       # debug APK (native NDK MP3 lib builds via CMake)
 ./gradlew :app:assembleRelease     # signed only if keystore set in local.properties
+./gradlew :app:bundlePlay          # signed Play AAB (app/build/outputs/bundle/play/)
 ./gradlew :app:testDebugUnitTest   # JVM unit tests, no network (baseline: 106 tests, 7 env-gated skips)
 ./gradlew :app:connectedDebugAndroidTest  # instrumented; needs device/emulator + real server creds
 ```
@@ -35,6 +36,7 @@ web/                static marketing/panel site (Cloudflare Pages), Bahasa Indon
 - **Protocol behavior is live-verified.** Ultravox handshake, XTEA auth, ADTS-wrapped AAC, in-stream `0x902` metadata are pinned by golden vectors (`UvoxXteaTest`) and live tests. Read `docs/plans/2026-07-18-uvox-finding.md` before changing `net/`. If a protocol change is unavoidable, keep golden vectors in sync deliberately.
 - **Teardown/idempotency discipline.** Services use single idempotent teardown paths and race guards; `TeardownStateTest`, `WireSafetyTest` pin this. Preserve those patterns in `StreamService`/`RecordService`/`AudioPipeline`.
 - **Secrets stay in `local.properties`** (gitignored): test-server creds and release keystore (`streamy.keystore.file/.alias/.password`). `streamy-release.jks` is gitignored too.
+- **Play vs GitHub builds.** `applicationId` is `dev.pages.streamy` (namespace/packages stay `com.streamy.app`). The `play` build type (`src/play/AndroidManifest.xml`) strips `REQUEST_INSTALL_PACKAGES` and sets `BuildConfig.IN_APP_UPDATE=false` — Play policy forbids self-updating outside Play. Never re-enable the updater in Play builds. GitHub/release builds keep it. Release plan + Play Console checklist: `docs/play-release-2026-11-13.md`.
 - **AAC via MediaCodec exists but is UI-disabled** (`BitrateChooser(allowAac = false)` at every call site; DNAS quirks, see protocol notes in README). Don't re-enable without re-verifying against a real DNAS2.
 - **CI is GitHub Actions** (`.github/workflows/android.yml`): tests + lint + debug APK + 16 KB alignment check on every push/PR; signed release only from repo secrets. Keep `NDK_VERSION`/`CMAKE_VERSION` there in sync with `app/build.gradle.kts`.
 - **Room schema is exported** to `app/schemas/` — commit the new JSON whenever `AppDatabase.version` bumps.

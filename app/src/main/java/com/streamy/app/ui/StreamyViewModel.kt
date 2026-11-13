@@ -8,6 +8,7 @@ import android.os.SystemClock
 import androidx.annotation.StringRes
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.streamy.app.BuildConfig
 import com.streamy.app.R
 import com.streamy.app.audio.LevelSnapshot
 import com.streamy.app.data.AudioConfig
@@ -239,9 +240,13 @@ class StreamyViewModel(app: Application) : AndroidViewModel(app) {
         }
         // Auto-update: silent check on startup. Any failure (offline, bad feed, same version)
         // stays invisible — the dialog only appears when there is something to install.
-        viewModelScope.launch {
-            val info = UpdateChecker.fetchUpdate() ?: return@launch
-            if (UpdateChecker.isNewer(info)) _update.value = UpdateDialog(info)
+        // Play builds set IN_APP_UPDATE=false: Google Play delivers updates itself and its
+        // policy forbids self-updating outside Play, so the whole flow is skipped there.
+        if (BuildConfig.IN_APP_UPDATE) {
+            viewModelScope.launch {
+                val info = UpdateChecker.fetchUpdate() ?: return@launch
+                if (UpdateChecker.isNewer(info)) _update.value = UpdateDialog(info)
+            }
         }
     }
 

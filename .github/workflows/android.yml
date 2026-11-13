@@ -133,6 +133,20 @@ jobs:
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
+      # Google Play artifact: `play` build type (updater compiled out, REQUEST_INSTALL_PACKAGES
+      # stripped). Upload to Play Console manually or via fastlane; signed with the upload key.
+      - name: Assemble Play AAB
+        if: env.KEYSTORE_BASE64 != ''
+        run: ./gradlew :app:bundlePlay
+
+      - name: Upload Play AAB
+        if: env.KEYSTORE_BASE64 != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamy-play-aab
+          path: app/build/outputs/bundle/play/*.aab
+          if-no-files-found: error
+
       - name: Publish GitHub release
         if: env.KEYSTORE_BASE64 != '' && startsWith(github.ref, 'refs/tags/v')
         env:

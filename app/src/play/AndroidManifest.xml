@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Play build-type manifest overlay. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Google Play's Device & Network Abuse policy forbids an app from updating itself
+         outside Play's update mechanism, and REQUEST_INSTALL_PACKAGES is a restricted
+         permission. The GitHub (sideload) builds keep it; Play builds strip it and the
+         updater is compiled out via BuildConfig.IN_APP_UPDATE=false. -->
+    <uses-permission
+        android:name="android.permission.REQUEST_INSTALL_PACKAGES"
+        tools:node="remove" />
+</manifest>

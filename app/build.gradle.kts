@@ -13,12 +13,20 @@ android {
     ndkVersion = "27.0.12077973"
 
     defaultConfig {
-        applicationId = "com.streamy.app"
+        // Play package name. Kotlin/Java package + namespace stay com.streamy.app — only the
+        // distribution id changes (manifest actions/authorities derive from it where relevant).
+        applicationId = "dev.pages.streamy"
         minSdk = 24
         targetSdk = 36
         versionCode = 15
         versionName = "1.14"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // In-app self-updater (GitHub Releases). Disabled in the `play` build type: Play's
+        // Device & Network Abuse policy forbids updating an app outside Google Play's
+        // update mechanism, so Play builds compile the check out and drop
+        // REQUEST_INSTALL_PACKAGES (see src/play/AndroidManifest.xml).
+        buildConfigField("boolean", "IN_APP_UPDATE", "true")
 
         // In-app update feed (GitHub Release asset written by CI). Kept in BuildConfig so
         // tests can pin a fixture and a fork can override without touching code.
@@ -86,6 +94,17 @@ android {
                 }
                 signingConfig = signingConfigs.getByName("release")
             }
+        }
+        // Google Play artifact (`bundlePlay` → app-play.aab). Same signing key as release —
+        // this is the upload key for Play App Signing. The in-app updater is compiled out
+        // (IN_APP_UPDATE=false) and REQUEST_INSTALL_PACKAGES removed via src/play/, because
+        // Play rejects apps that self-update outside Google Play.
+        create("play") {
+            initWith(getByName("release"))
+            buildConfigField("boolean", "IN_APP_UPDATE", "false")
+            // Explicitly re-apply the (conditionally created) release signing config; initWith
+            // copies it only if the release block already assigned it.
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 
