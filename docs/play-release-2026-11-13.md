@@ -65,12 +65,22 @@ Language: Indonesian (id). English translation optional but recommended later.
   > Streamy adalah alat siaran profesional yang muat di saku. Audio dikirim hanya ke server yang
   > Anda tentukan sendiri; pengembang tidak mengumpulkan data apa pun.
 
-- **Assets** (must be provided/created):
-  - App icon 512×512 PNG (32-bit, no transparency) — export from the adaptive icon design
-    (`ic_launcher_foreground`/`_background` vectors), don't upscale the 192px mipmap.
-  - Feature graphic 1024×500 PNG/JPG.
-  - ≥ 2 phone screenshots (1080×1920 or 1080×2340 portrait, or landscape equivalents),
-    unmodified. Home screen + live streaming screen with VU meter make the best pair.
+- **Assets**:
+  - App icon 512×512 PNG — **ready**: `web/assets/play/icon-512.png` (rendered from
+    `ic_launcher_foreground`/`_background` vectors, 32-bit RGB, no alpha).
+  - Feature graphic 1024×500 PNG — **ready**: `web/assets/play/feature-graphic-1024x500.png`
+    (tally mark + wordmark in Space Grotesk on #14161A). Both regenerate via
+    `python3 app/scripts/gen_play_assets.py` if the icon design changes.
+  - ≥ 2 phone screenshots (1080×1920 or 1080×2340 portrait, or landscape equivalents) —
+    **must be captured from a device/emulator** (headless server has no KVM). Quickest route:
+    install the debug APK on a phone, then:
+    ```bash
+    adb shell am start -n dev.pages.streamy/.MainActivity   # or com.streamy.app for debug
+    adb exec-out screencap -p > shot-home.png
+    # open the streaming screen (tap a profile → Start), then:
+    adb exec-out screencap -p > shot-live.png
+    ```
+    Home screen + live streaming screen with VU meter make the best pair.
     Device frames are allowed as long as they don't mislead.
 - **Category**: Music & Audio. **Tags**: optional.
 - **Contact email** (required), website `https://streamy-app.pages.dev/`.
